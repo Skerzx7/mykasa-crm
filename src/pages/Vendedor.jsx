@@ -200,7 +200,7 @@ export default function Vendedor() {
 
   return (
     // FIX iOS: 100dvh en lugar de 100vh — respeta la barra del navegador en Safari
-    <div style={{ height:'100dvh',display:'flex',flexDirection:'column',background:'var(--bg)',overflow:'hidden' }}>
+    <div style={{ height:'100dvh',display:'flex',flexDirection:'column',background:'var(--bg)',overflow:'hidden',position:'fixed',inset:0 }}>
 
       {/* Navbar — SIEMPRE visible */}
       <nav style={{ background:'var(--surface)',padding:'0 16px',height:'52px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,borderBottom:'1px solid var(--border)' }}>
@@ -266,7 +266,7 @@ export default function Vendedor() {
                 </div>
               </div>
 
-              <div style={{ overflowY:'auto',flex:1,background:'var(--bg)',WebkitOverflowScrolling:'touch' }}>
+              <div style={{ overflowY:'scroll',flex:1,background:'var(--bg)',WebkitOverflowScrolling:'touch',minHeight:0 }}>
                 {filtrados.length === 0 && (
                   <div style={{ padding:'48px 16px',textAlign:'center' }}>
                     <div style={{ fontSize:'36px',marginBottom:'8px' }}>{clientes.length===0?'📭':'🔍'}</div>
@@ -304,7 +304,7 @@ export default function Vendedor() {
           {clienteActivo && (isMobile ? enDetalleCliente : true) && (() => {
             const est = getEstado(clienteActivo.estado)
             return (
-              <div style={{ flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'12px',display:'flex',flexDirection:'column',gap:'10px',minWidth:0,background:'var(--bg)',paddingBottom:'calc(12px + env(safe-area-inset-bottom, 0px))' }} className="fade-in">
+              <div style={{ flex:1,overflowY:'scroll',WebkitOverflowScrolling:'touch',padding:'12px',display:'flex',flexDirection:'column',gap:'10px',minWidth:0,background:'var(--bg)',paddingBottom:'calc(80px + env(safe-area-inset-bottom, 0px))',minHeight:0 }} className="fade-in">
 
                 {/* Header */}
                 <div className="card" style={{ padding:'13px 14px' }}>
@@ -422,7 +422,7 @@ export default function Vendedor() {
 
       {/* ===== TAB MENSAJES ===== */}
       {tab === 'mensajes' && (
-        <div style={{ flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'16px',background:'var(--bg)',paddingBottom:'calc(16px + env(safe-area-inset-bottom, 0px))' }} className="fade-in">
+        <div style={{ flex:1,overflowY:'scroll',WebkitOverflowScrolling:'touch',padding:'16px',background:'var(--bg)',paddingBottom:'calc(80px + env(safe-area-inset-bottom, 0px))',minHeight:0 }} className="fade-in">
           <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px' }}>
             <div>
               <h2 style={{ fontSize:'16px',fontWeight:'800',marginBottom:'2px',color:'var(--text)' }}>Mis mensajes</h2>
@@ -476,7 +476,7 @@ export default function Vendedor() {
 
       {/* ===== TAB COMISIONES ===== */}
       {tab === 'comisiones' && (
-        <div style={{ flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'16px',background:'var(--bg)',paddingBottom:'calc(16px + env(safe-area-inset-bottom, 0px))' }} className="fade-in">
+        <div style={{ flex:1,overflowY:'scroll',WebkitOverflowScrolling:'touch',padding:'16px',background:'var(--bg)',paddingBottom:'calc(80px + env(safe-area-inset-bottom, 0px))',minHeight:0 }} className="fade-in">
           <div style={{ display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'10px',marginBottom:'20px' }}>
             {[
               { label:'Total cobrado',value:formatDinero(totalGanado),color:'var(--accent)',gradLeft:'#2d6a4f',gradRight:'#4ade80',icon:'💰' },
