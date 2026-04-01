@@ -7,6 +7,17 @@ import { ESTADOS, getEstado, abrirWhatsApp, formatFecha, timeAgo, formatDinero, 
 
 const TABS_V = [['clientes','👥','Mis Clientes'],['mensajes','💬','Mensajes'],['comisiones','💰','Mis Comisiones']]
 
+const LogoSVG = ({ size = 30 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ borderRadius:'8px', flexShrink:0 }}>
+    <rect width="100" height="100" rx="18" fill="#0d1a10"/>
+    <polygon points="50,14 86,42 14,42" fill="#4ade80"/>
+    <rect x="20" y="42" width="60" height="44" rx="2" fill="#166534"/>
+    <rect x="38" y="56" width="24" height="30" rx="2" fill="#0d1a10"/>
+    <rect x="16" y="68" width="8" height="6" rx="1" fill="#4ade80" opacity="0.5"/>
+    <rect x="79" y="68" width="8" height="6" rx="1" fill="#4ade80" opacity="0.5"/>
+  </svg>
+)
+
 export default function Vendedor() {
   const { user, userData, logout } = useAuth()
   const { show: toast } = useToast()
@@ -37,11 +48,14 @@ export default function Vendedor() {
   const [nuevoNombre, setNuevoNombre] = useState('')
   const [guardandoNombre, setGuardandoNombre] = useState(false)
 
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 680)
+  // FIX iOS: usar matchMedia en lugar de window.innerWidth para evitar 100vh bug
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 680)
   useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < 680)
-    window.addEventListener('resize', handler)
-    return () => window.removeEventListener('resize', handler)
+    const mq = window.matchMedia('(max-width: 679px)')
+    const handler = e => setIsMobile(e.matches)
+    mq.addEventListener('change', handler)
+    setIsMobile(mq.matches)
+    return () => mq.removeEventListener('change', handler)
   }, [])
 
   useEffect(() => {
@@ -82,7 +96,7 @@ export default function Vendedor() {
     if (!clienteActivo) return
     try {
       await updateDoc(doc(db, 'clientes', clienteActivo.id), { estado, updatedAt: serverTimestamp() })
-      toast(`Estado: ${getEstado(estado).label}`, 'info')
+      toast('Estado: ' + getEstado(estado).label, 'info')
     } catch { toast('Error al actualizar', 'error') }
   }
 
@@ -172,12 +186,12 @@ export default function Vendedor() {
     return s + comisionPendiente
   }, 0)
 
-  const mostrarLista = !isMobile || !clienteActivo
-  const mostrarDetalle = !isMobile || clienteActivo
+  // FIX: en mobile, detalle de cliente oculta la lista pero NO oculta navbar ni tabs
+  // FIX: tab mensajes y comisiones siempre muestran navbar completa
+  const enDetalleCliente = isMobile && clienteActivo && tab === 'clientes'
 
-  /* ─── helpers de estilo ─── */
-  const overlayStyle = { position:'fixed',inset:0,background:'rgba(5,10,7,0.85)',backdropFilter:'blur(8px)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center' }
-  const sheetStyle = { background:'var(--surface)',borderRadius:'22px 22px 0 0',width:'100%',maxWidth:'500px',padding:'20px 20px 32px',boxShadow:'0 -12px 48px rgba(0,0,0,0.6)',animation:'slideUp 0.28s ease',maxHeight:'92dvh',overflowY:'auto' }
+  const overlayStyle = { position:'fixed',inset:0,background:'rgba(5,10,7,0.88)',backdropFilter:'blur(10px)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center' }
+  const sheetStyle = { background:'var(--surface)',borderRadius:'22px 22px 0 0',width:'100%',maxWidth:'500px',padding:'20px 20px 0',boxShadow:'0 -12px 48px rgba(0,0,0,0.6)',animation:'slideUp 0.28s ease',maxHeight:'88dvh',overflowY:'auto',paddingBottom:'env(safe-area-inset-bottom, 20px)' }
   const handleStyle = { width:'36px',height:'4px',background:'var(--surface4)',borderRadius:'9999px',margin:'0 auto 18px' }
   const sheetHeaderStyle = { display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px' }
   const sheetTitleStyle = { fontSize:'16px',fontWeight:'700',color:'var(--text)' }
@@ -185,52 +199,57 @@ export default function Vendedor() {
   const fieldLabel = { display:'block',fontSize:'11px',fontWeight:'700',color:'var(--text3)',marginBottom:'5px',textTransform:'uppercase',letterSpacing:'0.5px' }
 
   return (
-    <div style={{ height:'100vh',display:'flex',flexDirection:'column',background:'var(--bg)',overflow:'hidden' }}>
+    // FIX iOS: 100dvh en lugar de 100vh — respeta la barra del navegador en Safari
+    <div style={{ height:'100dvh',display:'flex',flexDirection:'column',background:'var(--bg)',overflow:'hidden' }}>
 
-      {/* Navbar */}
-      <nav style={{ background:'var(--surface)',padding:'0 16px',height:'54px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,borderBottom:'1px solid var(--border)' }}>
+      {/* Navbar — SIEMPRE visible */}
+      <nav style={{ background:'var(--surface)',padding:'0 16px',height:'52px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,borderBottom:'1px solid var(--border)' }}>
         <div style={{ display:'flex',alignItems:'center',gap:'8px' }}>
-          {isMobile && clienteActivo && (
-            <button onClick={() => setClienteActivo(null)} style={{ background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'8px',padding:'6px 10px',color:'var(--text2)',fontSize:'14px',cursor:'pointer',fontWeight:'700',display:'flex',alignItems:'center',gap:'4px' }}>← Atrás</button>
-          )}
-          {(!isMobile || !clienteActivo) && (
-            <>
-              <div style={{ width:'30px',height:'30px',background:'linear-gradient(135deg,var(--v600),var(--v400))',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'14px',flexShrink:0 }}>🏡</div>
+          {/* FIX: botón atrás solo cuando estamos en detalle de cliente en mobile */}
+          {enDetalleCliente ? (
+            <button onClick={() => setClienteActivo(null)}
+              style={{ background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'8px',padding:'6px 10px',color:'var(--text2)',fontSize:'13px',cursor:'pointer',fontWeight:'600',display:'flex',alignItems:'center',gap:'4px',whiteSpace:'nowrap' }}>
+              ← Atrás
+            </button>
+          ) : (
+            <div style={{ display:'flex',alignItems:'center',gap:'8px' }}>
+              <LogoSVG size={30} />
               <span style={{ color:'var(--text)',fontWeight:'800',fontSize:'14px' }}>MyKasa CRM</span>
-            </>
+            </div>
           )}
-          {isMobile && clienteActivo && (
-            <span style={{ color:'var(--text)',fontWeight:'700',fontSize:'14px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'160px' }}>{clienteActivo.nombre}</span>
+          {enDetalleCliente && clienteActivo && (
+            <span style={{ color:'var(--text)',fontWeight:'700',fontSize:'14px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'130px' }}>{clienteActivo.nombre}</span>
           )}
         </div>
         <div style={{ display:'flex',alignItems:'center',gap:'8px' }}>
           <button onClick={() => { setNuevoNombre(userData?.nombre||''); setModalNombre(true) }}
             style={{ background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'8px',padding:'5px 10px',display:'flex',alignItems:'center',gap:'6px',cursor:'pointer' }}>
             <div style={{ width:'22px',height:'22px',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',color:'white',fontWeight:'800',fontSize:'10px',flexShrink:0 }}>{userData?.nombre?.charAt(0)}</div>
-            <span style={{ color:'var(--text2)',fontSize:'12px',fontWeight:'600',maxWidth:'80px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{userData?.nombre}</span>
+            <span style={{ color:'var(--text2)',fontSize:'12px',fontWeight:'600',maxWidth:'70px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{userData?.nombre}</span>
             <span style={{ fontSize:'11px' }}>✏️</span>
           </button>
           <button onClick={logout} style={{ background:'var(--red-bg)',color:'var(--red)',border:'1px solid var(--red-border)',borderRadius:'7px',padding:'6px 10px',fontSize:'12px',fontWeight:'600',cursor:'pointer' }}>Salir</button>
         </div>
       </nav>
 
-      {/* Tabs */}
-      {(!isMobile || !clienteActivo) && (
-        <div style={{ background:'var(--bg2)',padding:'0 16px',display:'flex',gap:'2px',borderBottom:'1px solid var(--border)',flexShrink:0,overflowX:'auto' }}>
-          {TABS_V.map(([key,icon,label]) => (
-            <button key={key} onClick={() => setTab(key)} style={{ background:'transparent',color:tab===key?'var(--accent)':'var(--text3)',border:'none',borderBottom:`2px solid ${tab===key?'var(--accent)':'transparent'}`,padding:'10px 14px',fontSize:'13px',fontWeight:'700',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',whiteSpace:'nowrap',transition:'all 0.15s',flexShrink:0 }}>
-              <span>{icon}</span><span>{label}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Tabs — SIEMPRE visibles (incluso en detalle cliente) */}
+      <div style={{ background:'var(--bg2)',padding:'0 16px',display:'flex',gap:'0',borderBottom:'1px solid var(--border)',flexShrink:0,overflowX:'auto',scrollbarWidth:'none' }}>
+        {TABS_V.map(([key,icon,label]) => (
+          <button key={key} onClick={() => { setTab(key); if(key !== 'clientes') setClienteActivo(null) }}
+            style={{ background:'transparent',color:tab===key?'var(--accent)':'var(--text3)',border:'none',borderBottom:'2px solid '+(tab===key?'var(--accent)':'transparent'),padding:'10px 14px',fontSize:'12px',fontWeight:tab===key?'700':'500',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',whiteSpace:'nowrap',transition:'all 0.15s',flexShrink:0 }}>
+            <span style={{ fontSize:'13px' }}>{icon}</span>
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
 
       {/* ===== TAB CLIENTES ===== */}
       {tab === 'clientes' && (
         <div style={{ display:'flex',flex:1,overflow:'hidden',minHeight:0 }}>
 
-          {mostrarLista && (
-            <div style={{ width:isMobile?'100%':(clienteActivo?'300px':'100%'),flexShrink:0,background:'var(--bg)',borderRight:isMobile?'none':'1px solid var(--border)',display:'flex',flexDirection:'column',overflow:'hidden' }}>
+          {/* Lista — oculta en mobile cuando hay cliente activo */}
+          {(!enDetalleCliente) && (
+            <div style={{ width:isMobile?'100%':'300px',flexShrink:0,background:'var(--bg)',borderRight:isMobile?'none':'1px solid var(--border)',display:'flex',flexDirection:'column',overflow:'hidden' }}>
               <div style={{ padding:'10px',borderBottom:'1px solid var(--border)',background:'var(--bg2)',flexShrink:0 }}>
                 <div style={{ display:'flex',gap:'8px',marginBottom:'8px',alignItems:'center' }}>
                   <div style={{ position:'relative',flex:1 }}>
@@ -240,14 +259,14 @@ export default function Vendedor() {
                   <button onClick={abrirNuevoCliente} className="btn btn-primary btn-sm" style={{ whiteSpace:'nowrap',flexShrink:0 }}>＋ Nuevo</button>
                 </div>
                 <div style={{ display:'flex',gap:'4px',flexWrap:'wrap' }}>
-                  <FiltroChip label={`Todos (${clientes.length})`} activo={filtro==='todos'} onClick={() => setFiltro('todos')} />
+                  <FiltroChip label={'Todos ('+clientes.length+')'} activo={filtro==='todos'} onClick={() => setFiltro('todos')} />
                   {ESTADOS.map(e => (
-                    <FiltroChip key={e.value} label={`${e.icon} ${e.label} (${conteo[e.value]||0})`} activo={filtro===e.value} onClick={() => setFiltro(filtro===e.value?'todos':e.value)} color={e.color} />
+                    <FiltroChip key={e.value} label={e.icon+' '+e.label+' ('+( conteo[e.value]||0)+')'} activo={filtro===e.value} onClick={() => setFiltro(filtro===e.value?'todos':e.value)} color={e.color} />
                   ))}
                 </div>
               </div>
 
-              <div style={{ overflowY:'auto',flex:1,background:'var(--bg)' }}>
+              <div style={{ overflowY:'auto',flex:1,background:'var(--bg)',WebkitOverflowScrolling:'touch' }}>
                 {filtrados.length === 0 && (
                   <div style={{ padding:'48px 16px',textAlign:'center' }}>
                     <div style={{ fontSize:'36px',marginBottom:'8px' }}>{clientes.length===0?'📭':'🔍'}</div>
@@ -256,15 +275,15 @@ export default function Vendedor() {
                 )}
                 {filtrados.map(c => {
                   const est = getEstado(c.estado)
-                  const esActivo = clienteActivo?.id === c.id
+                  const esActivo = clienteActivo?.id === c.id && !isMobile
                   return (
                     <div key={c.id} onClick={() => abrirCliente(c)}
-                      style={{ padding:'12px 14px',borderBottom:'1px solid var(--border)',cursor:'pointer',background:esActivo&&!isMobile?'var(--surface3)':'var(--bg2)',borderLeft:`3px solid ${esActivo&&!isMobile?est.color:'transparent'}`,transition:'background 0.15s' }}
-                      onMouseEnter={e => { if(!esActivo||isMobile) e.currentTarget.style.background='var(--surface2)' }}
-                      onMouseLeave={e => { if(!esActivo||isMobile) e.currentTarget.style.background='var(--bg2)' }}>
+                      style={{ padding:'12px 14px',borderBottom:'1px solid var(--border)',cursor:'pointer',background:esActivo?'var(--surface3)':'var(--bg2)',borderLeft:'3px solid '+(esActivo?est.color:'transparent'),transition:'background 0.15s' }}
+                      onMouseEnter={e => { if(!esActivo) e.currentTarget.style.background='var(--surface2)' }}
+                      onMouseLeave={e => { if(!esActivo) e.currentTarget.style.background='var(--bg2)' }}>
                       <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'3px' }}>
-                        <span style={{ fontWeight:'700',fontSize:'14px',color:esActivo&&!isMobile?est.color:'var(--text)' }}>{c.nombre}</span>
-                        <span className="badge" style={{ background:est.bg+'22',color:est.color,fontSize:'10px',border:`1px solid ${est.color}33` }}>{est.icon} {est.label}</span>
+                        <span style={{ fontWeight:'700',fontSize:'14px',color:esActivo?est.color:'var(--text)' }}>{c.nombre}</span>
+                        <span className="badge" style={{ background:est.bg+'22',color:est.color,fontSize:'10px',border:'1px solid '+est.color+'33' }}>{est.icon} {est.label}</span>
                       </div>
                       <div style={{ fontSize:'11px',color:'var(--text3)',marginBottom:'2px' }}>📱 {c.telefono}</div>
                       <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center' }}>
@@ -275,49 +294,57 @@ export default function Vendedor() {
                     </div>
                   )
                 })}
+                {/* FIX iOS: padding extra al final para que el último item no quede tapado */}
+                <div style={{ height:'env(safe-area-inset-bottom, 16px)', minHeight:'16px' }} />
               </div>
             </div>
           )}
 
-          {mostrarDetalle && clienteActivo && (() => {
+          {/* Detalle cliente */}
+          {clienteActivo && (isMobile ? enDetalleCliente : true) && (() => {
             const est = getEstado(clienteActivo.estado)
             return (
-              <div style={{ flex:1,overflowY:'auto',padding:'14px',display:'flex',flexDirection:'column',gap:'12px',minWidth:0,background:'var(--bg)' }} className="fade-in">
+              <div style={{ flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'12px',display:'flex',flexDirection:'column',gap:'10px',minWidth:0,background:'var(--bg)',paddingBottom:'calc(12px + env(safe-area-inset-bottom, 0px))' }} className="fade-in">
 
-                <div className="card" style={{ padding:'14px 16px' }}>
-                  <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:'10px' }}>
-                    <div style={{ display:'flex',alignItems:'center',gap:'10px' }}>
-                      <div style={{ width:'44px',height:'44px',background:`linear-gradient(135deg,${est.color}33,${est.color}55)`,border:`2px solid ${est.color}44`,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'800',color:est.color,fontSize:'17px',flexShrink:0 }}>
+                {/* Header */}
+                <div className="card" style={{ padding:'13px 14px' }}>
+                  <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'8px' }}>
+                    <div style={{ display:'flex',alignItems:'center',gap:'10px',minWidth:0 }}>
+                      <div style={{ width:'40px',height:'40px',background:'linear-gradient(135deg,'+est.color+'33,'+est.color+'55)',border:'2px solid '+est.color+'44',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'800',color:est.color,fontSize:'16px',flexShrink:0 }}>
                         {clienteActivo.nombre?.charAt(0)}
                       </div>
-                      <div>
-                        <h2 style={{ fontSize:'15px',fontWeight:'800',marginBottom:'2px',color:'var(--text)' }}>{clienteActivo.nombre}</h2>
-                        <div style={{ fontSize:'11px',color:'var(--text3)',display:'flex',gap:'10px',flexWrap:'wrap' }}>
+                      <div style={{ minWidth:0 }}>
+                        <h2 style={{ fontSize:'15px',fontWeight:'800',marginBottom:'2px',color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{clienteActivo.nombre}</h2>
+                        <div style={{ fontSize:'11px',color:'var(--text3)',display:'flex',gap:'8px',flexWrap:'wrap' }}>
                           <span>📱 {clienteActivo.telefono}</span>
                           {clienteActivo.mensualidad > 0 && <span>💵 {formatDinero(clienteActivo.mensualidad)}/mes</span>}
                           <span>📅 {formatFecha(clienteActivo.createdAt)}</span>
                         </div>
                       </div>
                     </div>
-                    <div style={{ display:'flex',gap:'6px',alignItems:'center',flexWrap:'wrap' }}>
-                      <button className="btn btn-success btn-sm" onClick={() => abrirWhatsApp(clienteActivo.telefono)}>📱 WhatsApp</button>
-                      {!isMobile && <button onClick={() => setClienteActivo(null)} style={{ background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'8px',padding:'7px 10px',fontSize:'13px',cursor:'pointer',color:'var(--text3)' }}>✕</button>}
+                    <div style={{ display:'flex',gap:'6px',alignItems:'center',flexShrink:0 }}>
+                      <button className="btn btn-success btn-sm" onClick={() => abrirWhatsApp(clienteActivo.telefono)}>📱 WA</button>
+                      {!isMobile && <button onClick={() => setClienteActivo(null)} style={{ background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'8px',padding:'6px 8px',fontSize:'12px',cursor:'pointer',color:'var(--text3)' }}>✕</button>}
                     </div>
                   </div>
                 </div>
 
-                <div className="card" style={{ padding:'13px 16px' }}>
-                  <p style={{ fontSize:'10px',fontWeight:'700',color:'var(--text3)',marginBottom:'9px',textTransform:'uppercase',letterSpacing:'0.5px' }}>Estado del cliente</p>
-                  <div style={{ display:'flex',gap:'6px',flexWrap:'wrap' }}>
+                {/* Estado */}
+                <div className="card" style={{ padding:'12px 14px' }}>
+                  <p style={{ fontSize:'10px',fontWeight:'700',color:'var(--text3)',marginBottom:'8px',textTransform:'uppercase',letterSpacing:'0.5px' }}>Estado del cliente</p>
+                  {/* FIX: scroll horizontal en lugar de wrap para no amontonar */}
+                  <div style={{ display:'flex',gap:'6px',overflowX:'auto',scrollbarWidth:'none',paddingBottom:'2px',WebkitOverflowScrolling:'touch' }}>
                     {ESTADOS.map(e => (
-                      <button key={e.value} onClick={() => cambiarEstado(e.value)} style={{ padding:'6px 12px',borderRadius:'var(--r-full)',border:`2px solid ${clienteActivo.estado===e.value?e.color:'var(--border)'}`,background:clienteActivo.estado===e.value?e.color+'22':'transparent',color:clienteActivo.estado===e.value?e.color:'var(--text3)',fontSize:'12px',fontWeight:'700',cursor:'pointer',transition:'var(--t)' }}>
+                      <button key={e.value} onClick={() => cambiarEstado(e.value)}
+                        style={{ padding:'6px 11px',borderRadius:'var(--r-full)',border:'2px solid '+(clienteActivo.estado===e.value?e.color:'var(--border)'),background:clienteActivo.estado===e.value?e.color+'22':'transparent',color:clienteActivo.estado===e.value?e.color:'var(--text3)',fontSize:'12px',fontWeight:'700',cursor:'pointer',transition:'var(--t)',whiteSpace:'nowrap',flexShrink:0 }}>
                         {e.icon} {e.label}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div className="card" style={{ padding:'13px 16px' }}>
+                {/* Mensajes */}
+                <div className="card" style={{ padding:'12px 14px' }}>
                   <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px' }}>
                     <p style={{ fontSize:'10px',fontWeight:'700',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'0.5px' }}>Mensajes predefinidos</p>
                     <button className="btn btn-secondary btn-sm" style={{ fontSize:'11px',padding:'4px 10px' }} onClick={() => { setEditandoMsg(null); setFm({titulo:'',texto:''}); setModalNuevoMsg(true) }}>＋ Crear</button>
@@ -329,23 +356,21 @@ export default function Vendedor() {
                       const esCop = copiado === m.id
                       const esMio = m.vendedorId === user.uid
                       return (
-                        <div key={m.id} style={{ background:'var(--surface2)',borderRadius:'10px',padding:'10px 12px',border:'1px solid var(--border)',transition:'border-color 0.15s' }}
-                          onMouseEnter={e => e.currentTarget.style.borderColor='var(--border3)'}
-                          onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
+                        <div key={m.id} style={{ background:'var(--surface2)',borderRadius:'10px',padding:'10px 12px',border:'1px solid var(--border)' }}>
                           <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px',flexWrap:'wrap',gap:'4px' }}>
                             <div style={{ display:'flex',alignItems:'center',gap:'5px' }}>
                               <span style={{ fontWeight:'700',fontSize:'12px',color:'var(--text)' }}>{m.titulo}</span>
                               {!esMio && <span style={{ fontSize:'9px',background:'rgba(74,222,128,0.1)',color:'var(--accent)',padding:'1px 6px',borderRadius:'10px',fontWeight:'700' }}>General</span>}
                             </div>
-                            <div style={{ display:'flex',gap:'4px' }}>
+                            <div style={{ display:'flex',gap:'4px',flexShrink:0 }}>
                               {esMio && (
                                 <>
                                   <button onClick={() => { setEditandoMsg(m); setFm({titulo:m.titulo,texto:m.texto}); setModalNuevoMsg(true) }} style={{ background:'var(--surface3)',border:'none',cursor:'pointer',fontSize:'13px',padding:'3px 7px',borderRadius:'5px',color:'var(--text2)' }}>✏️</button>
                                   <button onClick={() => eliminarMensaje(m.id)} style={{ background:'var(--red-bg)',border:'none',cursor:'pointer',fontSize:'13px',padding:'3px 7px',borderRadius:'5px',color:'var(--red)' }}>🗑️</button>
                                 </>
                               )}
-                              <button onClick={() => copiar(m)} style={{ background:esCop?'rgba(34,197,94,0.15)':'var(--surface3)',color:esCop?'var(--accent)':'var(--text3)',border:`1px solid ${esCop?'rgba(74,222,128,0.3)':'var(--border)'}`,borderRadius:'6px',padding:'4px 9px',fontSize:'11px',fontWeight:'700',cursor:'pointer',transition:'all 0.15s',display:'flex',alignItems:'center',gap:'3px' }}>
-                                {esCop ? '✓ Copiado' : '📋'}
+                              <button onClick={() => copiar(m)} style={{ background:esCop?'rgba(34,197,94,0.15)':'var(--surface3)',color:esCop?'var(--accent)':'var(--text3)',border:'1px solid '+(esCop?'rgba(74,222,128,0.3)':'var(--border)'),borderRadius:'6px',padding:'4px 9px',fontSize:'11px',fontWeight:'700',cursor:'pointer',display:'flex',alignItems:'center',gap:'3px' }}>
+                                {esCop ? '✓' : '📋'}
                               </button>
                               <button onClick={() => abrirWhatsApp(clienteActivo.telefono, txt)} style={{ background:'rgba(37,211,102,0.1)',color:'#25d366',border:'1px solid rgba(37,211,102,0.2)',borderRadius:'6px',padding:'4px 9px',fontSize:'11px',fontWeight:'700',cursor:'pointer' }}>📱</button>
                             </div>
@@ -357,32 +382,35 @@ export default function Vendedor() {
                   </div>
                 </div>
 
+                {/* Apartado */}
                 {clienteActivo.montoApartado > 0 && (() => {
                   const v = calcularVigenciaApartado(clienteActivo.montoApartado, clienteActivo.createdAt)
                   if (!v) return null
                   return (
-                    <div className="card" style={{ padding:'13px 16px',background:v.vencido?'rgba(248,113,113,0.06)':'rgba(251,146,60,0.06)',border:`1px solid ${v.vencido?'rgba(248,113,113,0.2)':'rgba(251,146,60,0.2)'}` }}>
+                    <div className="card" style={{ padding:'12px 14px',background:v.vencido?'rgba(248,113,113,0.06)':'rgba(251,146,60,0.06)',border:'1px solid '+(v.vencido?'rgba(248,113,113,0.2)':'rgba(251,146,60,0.2)') }}>
                       <p style={{ fontSize:'10px',fontWeight:'700',color:v.vencido?'var(--red)':'var(--orange)',marginBottom:'8px',textTransform:'uppercase',letterSpacing:'0.5px' }}>🔒 Apartado</p>
-                      <div style={{ display:'flex',gap:'14px',flexWrap:'wrap',fontSize:'12px',color:'var(--text2)' }}>
+                      <div style={{ display:'flex',gap:'12px',flexWrap:'wrap',fontSize:'12px',color:'var(--text2)' }}>
                         <span>💵 <strong>{formatDinero(clienteActivo.montoApartado)}</strong></span>
-                        <span>📅 <strong>{v.dias} días</strong> de vigencia</span>
+                        <span>📅 <strong>{v.dias} días</strong></span>
                         <span style={{ fontWeight:'700',color:v.vencido?'var(--red)':'var(--accent)' }}>
-                          {v.vencido ? `⚠️ Venció hace ${Math.abs(v.restantes)}d` : `✅ Vence en ${v.restantes}d`}
+                          {v.vencido ? '⚠️ Venció hace '+Math.abs(v.restantes)+'d' : '✅ Vence en '+v.restantes+'d'}
                         </span>
                       </div>
                     </div>
                   )
                 })()}
 
-                <div className="card" style={{ padding:'13px 16px' }}>
+                {/* Notas */}
+                <div className="card" style={{ padding:'12px 14px' }}>
                   <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px' }}>
                     <p style={{ fontSize:'10px',fontWeight:'700',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'0.5px' }}>Notas</p>
-                    {notasEditadas && <span style={{ fontSize:'10px',color:'var(--yellow)',fontWeight:'700',display:'flex',alignItems:'center',gap:'3px' }}>● Sin guardar</span>}
+                    {notasEditadas && <span style={{ fontSize:'10px',color:'var(--yellow)',fontWeight:'700' }}>● Sin guardar</span>}
                   </div>
                   <textarea value={notas} onChange={e => { setNotas(e.target.value); setNotasEditadas(true) }}
-                    placeholder="Lote de interés, presupuesto, fecha de visita programada, observaciones..."
+                    placeholder="Lote de interés, presupuesto, observaciones..."
                     rows={3} className="input" style={{ resize:'vertical',marginBottom:'8px',fontSize:'13px' }} />
-                  <button onClick={guardarNotas} disabled={guardandoNotas||!notasEditadas} className="btn btn-primary btn-sm" style={{ opacity:(guardandoNotas||!notasEditadas)?0.6:1,cursor:(guardandoNotas||!notasEditadas)?'not-allowed':'pointer',display:'flex',alignItems:'center',gap:'6px' }}>
+                  <button onClick={guardarNotas} disabled={guardandoNotas||!notasEditadas} className="btn btn-primary btn-sm"
+                    style={{ opacity:(guardandoNotas||!notasEditadas)?0.6:1,cursor:(guardandoNotas||!notasEditadas)?'not-allowed':'pointer',display:'flex',alignItems:'center',gap:'6px' }}>
                     {guardandoNotas ? <><div className="spinner" style={{ width:'14px',height:'14px' }} /><span>Guardando...</span></> : '💾 Guardar notas'}
                   </button>
                 </div>
@@ -394,11 +422,11 @@ export default function Vendedor() {
 
       {/* ===== TAB MENSAJES ===== */}
       {tab === 'mensajes' && (
-        <div style={{ flex:1,overflowY:'auto',padding:'16px',background:'var(--bg)' }} className="fade-in">
+        <div style={{ flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'16px',background:'var(--bg)',paddingBottom:'calc(16px + env(safe-area-inset-bottom, 0px))' }} className="fade-in">
           <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px' }}>
             <div>
               <h2 style={{ fontSize:'16px',fontWeight:'800',marginBottom:'2px',color:'var(--text)' }}>Mis mensajes</h2>
-              <p style={{ fontSize:'12px',color:'var(--text3)' }}>Plantillas para enviar a tus clientes por WhatsApp</p>
+              <p style={{ fontSize:'12px',color:'var(--text3)' }}>Plantillas para WhatsApp</p>
             </div>
             <button className="btn btn-primary btn-sm" onClick={() => { setEditandoMsg(null); setFm({titulo:'',texto:''}); setModalNuevoMsg(true) }}>＋ Nuevo</button>
           </div>
@@ -413,10 +441,10 @@ export default function Vendedor() {
             <div style={{ display:'flex',flexDirection:'column',gap:'10px',marginBottom:'20px' }}>
               {mensajes.filter(m => m.vendedorId === user.uid).map(m => (
                 <div key={m.id} className="card" style={{ padding:'14px 16px' }}>
-                  <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px' }}>
+                  <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px',gap:'8px' }}>
                     <span style={{ fontWeight:'700',fontSize:'14px',color:'var(--text)' }}>{m.titulo}</span>
-                    <div style={{ display:'flex',gap:'4px' }}>
-                      <button onClick={() => { setEditandoMsg(m); setFm({titulo:m.titulo,texto:m.texto}); setModalNuevoMsg(true) }} style={{ background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'7px',padding:'5px 9px',fontSize:'12px',cursor:'pointer',color:'var(--text2)' }}>✏️ Editar</button>
+                    <div style={{ display:'flex',gap:'4px',flexShrink:0 }}>
+                      <button onClick={() => { setEditandoMsg(m); setFm({titulo:m.titulo,texto:m.texto}); setModalNuevoMsg(true) }} style={{ background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'7px',padding:'5px 9px',fontSize:'12px',cursor:'pointer',color:'var(--text2)' }}>✏️</button>
                       <button onClick={() => eliminarMensaje(m.id)} style={{ background:'var(--red-bg)',border:'1px solid var(--red-border)',borderRadius:'7px',padding:'5px 9px',fontSize:'12px',cursor:'pointer',color:'var(--red)' }}>🗑️</button>
                     </div>
                   </div>
@@ -448,45 +476,45 @@ export default function Vendedor() {
 
       {/* ===== TAB COMISIONES ===== */}
       {tab === 'comisiones' && (
-        <div style={{ flex:1,overflowY:'auto',padding:'16px',background:'var(--bg)' }} className="fade-in">
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'10px',marginBottom:'20px' }}>
+        <div style={{ flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'16px',background:'var(--bg)',paddingBottom:'calc(16px + env(safe-area-inset-bottom, 0px))' }} className="fade-in">
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'10px',marginBottom:'20px' }}>
             {[
               { label:'Total cobrado',value:formatDinero(totalGanado),color:'var(--accent)',gradLeft:'#2d6a4f',gradRight:'#4ade80',icon:'💰' },
               { label:'Por cobrar',value:formatDinero(totalPendiente),color:'var(--yellow)',gradLeft:'#ca8a04',gradRight:'#fbbf24',icon:'⏳' },
               { label:'Ventas cerradas',value:clientesConContrato.length,color:'var(--purple)',gradLeft:'#7c3aed',gradRight:'#a78bfa',icon:'✍️' },
               { label:'Mi comisión',value:formatDinero(comisionVendedor),color:'var(--blue)',gradLeft:'#1d4ed8',gradRight:'#60a5fa',icon:'💵' },
             ].map((s,i) => (
-              <div key={i} className="card" style={{ padding:'16px',textAlign:'center',position:'relative',overflow:'hidden' }}>
-                <div style={{ position:'absolute',top:0,left:0,right:0,height:'3px',background:`linear-gradient(90deg,${s.gradLeft},${s.gradRight})` }} />
-                <div style={{ fontSize:'24px',marginBottom:'5px' }}>{s.icon}</div>
-                <div style={{ fontSize:'18px',fontWeight:'800',color:s.color,marginBottom:'3px' }}>{s.value}</div>
+              <div key={i} className="card" style={{ padding:'14px',textAlign:'center',position:'relative',overflow:'hidden' }}>
+                <div style={{ position:'absolute',top:0,left:0,right:0,height:'3px',background:'linear-gradient(90deg,'+s.gradLeft+','+s.gradRight+')' }} />
+                <div style={{ fontSize:'22px',marginBottom:'4px' }}>{s.icon}</div>
+                <div style={{ fontSize:'16px',fontWeight:'800',color:s.color,marginBottom:'2px' }}>{s.value}</div>
                 <div style={{ fontSize:'10px',color:'var(--text3)',fontWeight:'600' }}>{s.label}</div>
               </div>
             ))}
           </div>
 
-          <h3 style={{ fontSize:'15px',fontWeight:'700',marginBottom:'12px',color:'var(--text2)' }}>Detalle por cliente</h3>
+          <h3 style={{ fontSize:'14px',fontWeight:'700',marginBottom:'12px',color:'var(--text2)' }}>Detalle por cliente</h3>
 
           {clientesConContrato.length === 0
-            ? <div className="card" style={{ padding:'48px',textAlign:'center' }}><div style={{ fontSize:'40px',marginBottom:'8px' }}>💼</div><p style={{ color:'var(--text3)',fontSize:'13px' }}>Sin ventas cerradas aún</p></div>
+            ? <div className="card" style={{ padding:'40px',textAlign:'center' }}><div style={{ fontSize:'36px',marginBottom:'8px' }}>💼</div><p style={{ color:'var(--text3)',fontSize:'13px' }}>Sin ventas cerradas aún</p></div>
             : <div style={{ display:'flex',flexDirection:'column',gap:'10px' }}>
               {clientesConContrato.map(c => {
                 const { pagos,comisionTotal,comisionCubierta,comisionPendiente } = calcularComisiones(c.comision||comisionVendedor,c.mensualidad||2000,c.pagosRegistrados||[])
                 const pct = comisionTotal>0 ? Math.round((comisionCubierta/comisionTotal)*100) : 0
                 const pagosVendedor = pagos.filter(p => p.montoVendedor>0)
                 return (
-                  <div key={c.id} className="card" style={{ padding:'14px 16px' }}>
-                    <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'12px',flexWrap:'wrap',gap:'6px' }}>
-                      <div>
-                        <div style={{ fontWeight:'700',fontSize:'14px',marginBottom:'2px',color:'var(--text)' }}>{c.nombre}</div>
-                        <div style={{ fontSize:'11px',color:'var(--text3)',display:'flex',gap:'10px',flexWrap:'wrap' }}>
+                  <div key={c.id} className="card" style={{ padding:'13px 14px' }}>
+                    <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'10px',gap:'8px' }}>
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontWeight:'700',fontSize:'14px',marginBottom:'2px',color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{c.nombre}</div>
+                        <div style={{ fontSize:'11px',color:'var(--text3)',display:'flex',gap:'8px',flexWrap:'wrap' }}>
                           <span>💵 {formatDinero(c.mensualidad)}/mes</span>
-                          {c.enganche>0 && <span>🤝 Eng. {formatDinero(c.enganche)}</span>}
+                          {c.enganche>0 && <span>🤝 {formatDinero(c.enganche)}</span>}
                         </div>
                       </div>
-                      <div style={{ textAlign:'right' }}>
-                        <div style={{ fontSize:'10px',color:'var(--text3)' }}>Mi comisión</div>
-                        <div style={{ fontWeight:'800',fontSize:'17px',color:'var(--accent)' }}>{formatDinero(comisionTotal)}</div>
+                      <div style={{ textAlign:'right',flexShrink:0 }}>
+                        <div style={{ fontSize:'10px',color:'var(--text3)' }}>Comisión</div>
+                        <div style={{ fontWeight:'800',fontSize:'16px',color:'var(--accent)' }}>{formatDinero(comisionTotal)}</div>
                       </div>
                     </div>
                     <div style={{ marginBottom:'10px' }}>
@@ -494,15 +522,15 @@ export default function Vendedor() {
                         <span style={{ color:'var(--accent)',fontWeight:'700' }}>Cobrado: {formatDinero(comisionCubierta)}</span>
                         <span style={{ color:'var(--yellow)',fontWeight:'700' }}>Pendiente: {formatDinero(comisionPendiente)}</span>
                       </div>
-                      <div style={{ background:'var(--surface4)',borderRadius:'99px',height:'7px',overflow:'hidden' }}>
-                        <div style={{ width:`${pct}%`,height:'100%',background:'linear-gradient(90deg,var(--v600),var(--accent))',borderRadius:'99px',transition:'width 0.6s var(--ease)' }} />
+                      <div style={{ background:'var(--surface4)',borderRadius:'99px',height:'6px',overflow:'hidden' }}>
+                        <div style={{ width:pct+'%',height:'100%',background:'linear-gradient(90deg,var(--v600),var(--accent))',borderRadius:'99px',transition:'width 0.6s var(--ease)' }} />
                       </div>
-                      <div style={{ fontSize:'10px',color:'var(--text3)',marginTop:'2px',textAlign:'right',fontWeight:'600' }}>{pct}% cobrado</div>
+                      <div style={{ fontSize:'10px',color:'var(--text3)',marginTop:'2px',textAlign:'right' }}>{pct}% cobrado</div>
                     </div>
                     <div style={{ display:'flex',gap:'5px',flexWrap:'wrap' }}>
                       {pagosVendedor.map((p,i) => (
-                        <div key={i} style={{ padding:'4px 8px',borderRadius:'7px',fontSize:'10px',fontWeight:'700',display:'flex',alignItems:'center',gap:'3px',background:p.pagadoVendedor?'rgba(34,197,94,0.1)':'rgba(251,191,36,0.1)',color:p.pagadoVendedor?'var(--accent)':'var(--yellow)',border:`1px solid ${p.pagadoVendedor?'rgba(74,222,128,0.2)':'rgba(251,191,36,0.2)'}` }}>
-                          {p.tipo==='enganche'?'🤝 Enganche':`M${p.numero}`}
+                        <div key={i} style={{ padding:'4px 8px',borderRadius:'7px',fontSize:'10px',fontWeight:'700',display:'flex',alignItems:'center',gap:'3px',background:p.pagadoVendedor?'rgba(34,197,94,0.1)':'rgba(251,191,36,0.1)',color:p.pagadoVendedor?'var(--accent)':'var(--yellow)',border:'1px solid '+(p.pagadoVendedor?'rgba(74,222,128,0.2)':'rgba(251,191,36,0.2)') }}>
+                          {p.tipo==='enganche'?'🤝 Eng':'M'+p.numero}
                           <span>{formatDinero(p.montoVendedor)}</span>
                           {p.pagadoVendedor ? <span>✓</span> : <span style={{ opacity:.6 }}>⏳</span>}
                         </div>
@@ -543,13 +571,13 @@ export default function Vendedor() {
             </div>
             <div style={{ marginBottom:'16px' }}>
               <label style={fieldLabel}>Notas</label>
-              <textarea className="input" value={fc.notas} onChange={e => setFc({...fc,notas:e.target.value})} rows={2} placeholder="Lote de interés, presupuesto..." style={{ resize:'vertical',fontSize:'13px' }} />
+              <textarea className="input" value={fc.notas} onChange={e => setFc({...fc,notas:e.target.value})} rows={2} placeholder="Lote de interés, presupuesto..." style={{ resize:'none',fontSize:'13px' }} />
             </div>
             {errorCliente && <div style={{ background:'var(--red-bg)',color:'var(--red)',padding:'10px 12px',borderRadius:'10px',fontSize:'12px',fontWeight:'600',marginBottom:'12px',border:'1px solid var(--red-border)' }}>⚠️ {errorCliente}</div>}
-            <div style={{ display:'flex',gap:'8px' }}>
+            <div style={{ display:'flex',gap:'8px',paddingBottom:'8px' }}>
               <button onClick={() => setModalNuevoCliente(false)} className="btn btn-secondary" style={{ flex:1 }}>Cancelar</button>
               <button onClick={guardarCliente} disabled={guardandoCliente} className="btn btn-primary" style={{ flex:1,opacity:guardandoCliente?0.7:1 }}>
-                {guardandoCliente ? <><div className="spinner" style={{ width:'16px',height:'16px' }} /><span>Guardando...</span></> : 'Agregar cliente'}
+                {guardandoCliente ? <><div className="spinner" style={{ width:'16px',height:'16px' }} /><span>Guardando...</span></> : 'Agregar'}
               </button>
             </div>
           </div>
@@ -570,10 +598,11 @@ export default function Vendedor() {
               <input className="input" value={fm.titulo} onChange={e => setFm({...fm,titulo:e.target.value})} placeholder="Ej: Seguimiento día 3" autoFocus />
             </div>
             <div style={{ marginBottom:'16px' }}>
-              <label style={fieldLabel}>Texto * <span style={{ fontWeight:'400',color:'var(--text4)',textTransform:'none',fontSize:'10px' }}>— usa {'{nombre}'} para el nombre</span></label>
-              <textarea className="input" value={fm.texto} onChange={e => setFm({...fm,texto:e.target.value})} rows={4} style={{ resize:'vertical',fontSize:'13px' }} placeholder="Hola {nombre}, ..." />
+              <label style={fieldLabel}>Texto *</label>
+              <textarea className="input" value={fm.texto} onChange={e => setFm({...fm,texto:e.target.value})} rows={4} style={{ resize:'none',fontSize:'13px' }} placeholder="Hola {nombre}, ..." />
+              <p style={{ fontSize:'10px',color:'var(--text4)',marginTop:'4px' }}>Usa {'{nombre}'} para insertar el nombre</p>
             </div>
-            <div style={{ display:'flex',gap:'8px' }}>
+            <div style={{ display:'flex',gap:'8px',paddingBottom:'8px' }}>
               <button onClick={() => { setModalNuevoMsg(false); setEditandoMsg(null) }} className="btn btn-secondary" style={{ flex:1 }}>Cancelar</button>
               <button onClick={guardarMensaje} disabled={guardandoMsg||!fm.titulo.trim()||!fm.texto.trim()} className="btn btn-primary" style={{ flex:1,opacity:(guardandoMsg||!fm.titulo.trim()||!fm.texto.trim())?0.6:1 }}>
                 {guardandoMsg ? <><div className="spinner" style={{ width:'16px',height:'16px' }} /><span>Guardando...</span></> : 'Guardar'}
@@ -586,8 +615,8 @@ export default function Vendedor() {
       {/* Modal editar nombre */}
       {modalNombre && (
         <div onClick={e => { if(e.target===e.currentTarget) setModalNombre(false) }}
-          style={{ position:'fixed',inset:0,background:'rgba(5,10,7,0.85)',backdropFilter:'blur(8px)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px' }}>
-          <div style={{ background:'var(--surface)',borderRadius:'22px',padding:'24px',width:'100%',maxWidth:'340px',boxShadow:'var(--sh-xl)',animation:'scaleIn 0.18s ease',border:'1px solid var(--border2)' }}>
+          style={{ position:'fixed',inset:0,background:'rgba(5,10,7,0.88)',backdropFilter:'blur(10px)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px' }}>
+          <div style={{ background:'var(--surface)',borderRadius:'20px',padding:'24px',width:'100%',maxWidth:'320px',boxShadow:'var(--sh-xl)',animation:'scaleIn 0.18s ease',border:'1px solid var(--border2)' }}>
             <h3 style={{ fontSize:'16px',fontWeight:'700',marginBottom:'16px',color:'var(--text)' }}>Editar mi nombre</h3>
             <input className="input" value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Tu nombre completo" autoFocus style={{ marginBottom:'14px' }}
               onKeyDown={e => { if(e.key==='Enter') guardarNombre() }} />
@@ -606,7 +635,7 @@ export default function Vendedor() {
 
 function FiltroChip({ label, activo, onClick, color }) {
   return (
-    <button onClick={onClick} style={{ background:activo?'rgba(74,222,128,0.12)':'var(--surface2)',color:activo?(color||'var(--accent)'):'var(--text3)',border:`1.5px solid ${activo?(color||'rgba(74,222,128,0.35)'):'var(--border2)'}`,borderRadius:'var(--r-full)',padding:'4px 9px',fontSize:'11px',fontWeight:'700',cursor:'pointer',transition:'var(--t)',whiteSpace:'nowrap' }}>
+    <button onClick={onClick} style={{ background:activo?'rgba(74,222,128,0.12)':'var(--surface2)',color:activo?(color||'var(--accent)'):'var(--text3)',border:'1.5px solid '+(activo?(color||'rgba(74,222,128,0.35)'):'var(--border2)'),borderRadius:'var(--r-full)',padding:'4px 9px',fontSize:'11px',fontWeight:'700',cursor:'pointer',transition:'var(--t)',whiteSpace:'nowrap',flexShrink:0 }}>
       {label}
     </button>
   )
