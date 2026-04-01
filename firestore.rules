@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isRole(role) {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
+    function isAdmin()    { return isRole('admin'); }
+    function isVendedor() { return isRole('vendedor'); }
+
+    // ── USERS ──────────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow get:    if isAdmin() || (isAuth() && request.auth.uid == userId);
+
+      // FIX: solo admin puede listar — vendedores no pueden escanear la colección
+      allow list:   if isAdmin();
+
+      // Crear: admin o el propio usuario (auto-creación en syncVendorDoc)
+      allow create: if isAdmin() || (isAuth() && request.auth.uid == userId);
+
+      // Actualizar: admin puede todo; vendedor solo puede cambiar nombre, no role ni pin
+      allow update: if isAdmin() ||
+        (isAuth() && request.auth.uid == userId &&
+         !request.resource.data.diff(resource.data).affectedKeys()
+           .hasAny(['role', 'pin', 'email', 'comision']));
+
+      // FIX: admin NO puede borrarse a sí mismo — previene quedarse sin acceso
+      // Vendedor no puede borrarse — evita clientes huérfanos
+      allow delete: if isAdmin() && request.auth.uid != userId;
+    }
+
+    // ── CLIENTES ───────────────────────────────────────────────────────────────
+    match /clientes/{clienteId} {
+      // Admin ve todo; vendedor solo ve los suyos
+      allow read: if isAdmin() ||
+        (isVendedor() && resource.data.vendedorId == request.auth.uid);
+
+      // Crear: admin sin restricción; vendedor solo puede crear con su propio UID
+      allow create: if isAdmin() ||
+        (isVendedor() &&
+         request.resource.data.vendedorId == request.auth.uid);
+
+      // Actualizar: admin sin restricción
+      // Vendedor: solo sus clientes y no puede cambiar vendedorId ni comision
+      // Migración UID: vendedor puede reclamar clientes con su nuevo UID (solo esos 2 campos)
+      allow update: if isAdmin() ||
+        (isVendedor() &&
+         resource.data.vendedorId == request.auth.uid &&
+         !request.resource.data.diff(resource.data).affectedKeys()
+           .hasAny(['vendedorId', 'comision'])) ||
+        (isVendedor() &&
+         request.resource.data.vendedorId == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['vendedorId', 'updatedAt']));
+
+      // Solo admin puede eliminar clientes
+      allow delete: if isAdmin();
+    }
+
+    // ── LOTES ──────────────────────────────────────────────────────────────────
+    match /lotes/{loteId} {
+      // Vendedores pueden leer lotes para mostrar el catálogo
+      allow read:  if isAuth();
+      // Solo admin puede gestionar el catálogo
+      allow write: if isAdmin();
+    }
+
+    // ── MENSAJES ───────────────────────────────────────────────────────────────
+    match /mensajes/{mensajeId} {
+      // Todos los autenticados pueden leer mensajes
+      allow read: if isAuth();
+
+      // Crear: admin sin restricción; vendedor solo puede crear mensajes propios
+      allow create: if isAdmin() ||
+        (isVendedor() && request.resource.data.vendedorId == request.auth.uid);
+
+      // Actualizar/eliminar: admin todo; vendedor solo sus mensajes
+      // FIX: vendedor no puede cambiar vendedorId de un mensaje
+      allow update: if isAdmin() ||
+        (isVendedor() &&
+         resource.data.vendedorId == request.auth.uid &&
+         !request.resource.data.diff(resource.data).affectedKeys()
+           .hasAny(['vendedorId']));
+
+      allow delete: if isAdmin() ||
+        (isVendedor() && resource.data.vendedorId == request.auth.uid);
+    }
+  }
+}
