@@ -121,7 +121,7 @@ export default function Admin() {
   const [fv, setFv] = useState({ nombre:'',pin:'',comision:'5000' })
   const [fedit, setFedit] = useState({ nombre:'',pin:'',comision:'' })
   const [fm, setFm] = useState({ titulo:'',texto:'',vendedorId:'todos' })
-  const [fpago, setFpago] = useState({ tipo:'mensualidad',numero:1,pagadoVendedor:false,fechaPago:new Date().toISOString().split('T')[0] })
+  const [fpago, setFpago] = useState({ tipo:'mensualidad',numero:1,pagadoVendedor:false,fechaPago:new Date().toISOString().split('T')[0],montoLibre:'' })
   const [fmv, setFmv] = useState({ titulo:'',texto:'' })
   const [fl, setFl] = useState({ manzana:'',numero:'',superficie:'',precio:'',disponible:true })
   const [editandoMsgV, setEditandoMsgV] = useState(null)
@@ -346,13 +346,23 @@ export default function Admin() {
 
   const registrarPago = async () => {
     if (!modalPago) return
+    // monto: usa el libre si se especificó, si no el default del tipo
+    const montoFinal = fpago.montoLibre && Number(fpago.montoLibre) > 0
+      ? Number(fpago.montoLibre)
+      : fpago.tipo==='enganche' ? (modalPago.enganche||0) : (modalPago.mensualidad||2000)
     setCargando(true)
     try {
       const pagosActuales = modalPago.pagosRegistrados||[]
       const yaExiste = pagosActuales.find(p => p.tipo===fpago.tipo && p.numero===fpago.numero)
       const nuevosPagos = yaExiste
-        ? pagosActuales.map(p => (p.tipo===fpago.tipo&&p.numero===fpago.numero)?{...p,pagadoVendedor:fpago.pagadoVendedor,fechaPago:fpago.fechaPago}:p)
-        : [...pagosActuales, {tipo:fpago.tipo,numero:Number(fpago.numero),pagadoVendedor:fpago.pagadoVendedor,fechaPago:fpago.fechaPago,monto:fpago.tipo==='enganche'?(modalPago.enganche||0):(modalPago.mensualidad||2000)}]
+        ? pagosActuales.map(p => (p.tipo===fpago.tipo&&p.numero===fpago.numero)
+            ? {...p, pagadoVendedor:fpago.pagadoVendedor, fechaPago:fpago.fechaPago, monto:montoFinal}
+            : p)
+        : [...pagosActuales, {
+            tipo:fpago.tipo, numero:Number(fpago.numero),
+            pagadoVendedor:fpago.pagadoVendedor, fechaPago:fpago.fechaPago,
+            monto:montoFinal
+          }]
       await updateDoc(doc(db,'clientes',modalPago.id), {pagosRegistrados:nuevosPagos,updatedAt:serverTimestamp()})
       setModalPago(null)
       toast(fpago.pagadoVendedor?'Pago registrado ✓':'Pago marcado pendiente', fpago.pagadoVendedor?'success':'info')
@@ -529,7 +539,8 @@ export default function Admin() {
                 </div>
               ))}
             </div>
-            <h3 style={{ fontSize:'16px',fontWeight:'700',marginBottom:'12px',color:'var(--text2)' }}>Detalle por cliente</h3>
+            <h3 style={{ fontSize:'16px',fontWeight:'700',marginBottom:'4px',color:'var(--text2)' }}>Detalle por cliente</h3>
+            <p style={{ fontSize:'12px',color:'var(--text3)',marginBottom:'12px' }}>Contratos firmados · Usa "+ Pago" para registrar enganche o mensualidades</p>
             <div style={{ display:'flex',flexDirection:'column',gap:'10px' }}>
               {clientes.filter(c => (c.estado==='contrato'||c.estado==='cerrado') && (filtroComisionVendedor==='todos'||c.vendedorId===filtroComisionVendedor)).map(c => {
                 const v = vendedores.find(x => x.id===c.vendedorId)
@@ -552,7 +563,7 @@ export default function Admin() {
                           <div style={{ fontWeight:'800',fontSize:'16px',color:'var(--accent)' }}>{formatDinero(comisionTotal)}</div>
                         </div>
                         <button className="btn btn-secondary btn-sm" onClick={() => abrirEditarCliente(c)}>✏️ Editar</button>
-                        <button className="btn btn-primary btn-sm" onClick={() => { setModalPago(c); setFpago({tipo:'mensualidad',numero:1,pagadoVendedor:false,fechaPago:new Date().toISOString().split('T')[0]}) }}>+ Pago</button>
+                        <button className="btn btn-primary btn-sm" onClick={() => { setModalPago(c); setFpago({tipo:'mensualidad',numero:1,pagadoVendedor:false,fechaPago:new Date().toISOString().split('T')[0],montoLibre:''}) }}>+ Pago</button>
                       </div>
                     </div>
                     <div style={{ marginBottom:'12px' }}>
@@ -789,20 +800,55 @@ export default function Admin() {
       {modalPago && (() => {
         const {pagos} = calcularComisiones(modalPago.comision||5000, modalPago.mensualidad||2000, modalPago.pagosRegistrados||[])
         const pagosVendedor = pagos.filter(p => p.montoVendedor>0)
+        const montoDefault = fpago.tipo==='enganche' ? (modalPago.enganche||0) : (modalPago.mensualidad||2000)
         return (
           <Modal titulo={'Registrar pago — '+modalPago.nombre} onClose={() => setModalPago(null)}>
-            <div style={{ background:'var(--surface2)',borderRadius:'10px',padding:'10px 14px',marginBottom:'14px',fontSize:'13px',color:'var(--text2)' }}>
-              Mensualidad: <strong>{formatDinero(modalPago.mensualidad||2000)}</strong> · Comisión total: <strong>{formatDinero(modalPago.comision||5000)}</strong>
+            {/* Info resumen */}
+            <div style={{ background:'var(--surface2)',borderRadius:'10px',padding:'10px 14px',marginBottom:'14px',fontSize:'13px',color:'var(--text2)',display:'flex',gap:'16px',flexWrap:'wrap' }}>
+              <span>Mensualidad: <strong>{formatDinero(modalPago.mensualidad||2000)}</strong></span>
+              {(modalPago.enganche||0)>0 && <span>Enganche: <strong>{formatDinero(modalPago.enganche)}</strong></span>}
+              <span>Comisión: <strong>{formatDinero(modalPago.comision||5000)}</strong></span>
             </div>
-            <Field label="Selecciona el pago">
-              <select className="input" value={fpago.tipo+'-'+fpago.numero} onChange={e => { const [tipo,num]=e.target.value.split('-'); setFpago({...fpago,tipo,numero:Number(num)}) }}>
-                {pagosVendedor.map(p => <option key={p.tipo+'-'+p.numero} value={p.tipo+'-'+p.numero}>{p.tipo==='enganche'?'🤝 Enganche':'💵 Mensualidad '+p.numero} — {formatDinero(p.montoVendedor)} {p.pagadoVendedor?'✓ Pagado':'(pendiente)'}</option>)}
-              </select>
+
+            {/* Tipo de pago */}
+            <Field label="Tipo de pago">
+              <div style={{ display:'flex',gap:'8px',marginBottom:'4px' }}>
+                <button onClick={() => setFpago({...fpago,tipo:'mensualidad',numero:1,montoLibre:''})}
+                  style={{ flex:1,padding:'9px',border:'2px solid '+(fpago.tipo==='mensualidad'?'var(--accent)':'var(--border)'),borderRadius:'8px',background:fpago.tipo==='mensualidad'?'rgba(74,222,128,0.1)':'transparent',color:fpago.tipo==='mensualidad'?'var(--accent)':'var(--text3)',fontSize:'13px',fontWeight:'600',cursor:'pointer' }}>
+                  💵 Mensualidad
+                </button>
+                <button onClick={() => setFpago({...fpago,tipo:'enganche',numero:0,montoLibre:String(modalPago.enganche||'')})}
+                  style={{ flex:1,padding:'9px',border:'2px solid '+(fpago.tipo==='enganche'?'var(--accent)':'var(--border)'),borderRadius:'8px',background:fpago.tipo==='enganche'?'rgba(74,222,128,0.1)':'transparent',color:fpago.tipo==='enganche'?'var(--accent)':'var(--text3)',fontSize:'13px',fontWeight:'600',cursor:'pointer' }}>
+                  🤝 Enganche
+                </button>
+              </div>
             </Field>
-            <Field label="Estado">
+
+            {/* Número de mensualidad si aplica */}
+            {fpago.tipo==='mensualidad' && (
+              <Field label="Número de mensualidad">
+                <select className="input" value={fpago.numero} onChange={e => setFpago({...fpago,numero:Number(e.target.value),montoLibre:''})}>
+                  {pagosVendedor.filter(p=>p.tipo==='mensualidad').map(p => (
+                    <option key={p.numero} value={p.numero}>
+                      Mensualidad {p.numero} — {formatDinero(p.montoVendedor)} {p.pagadoVendedor?'✓ Pagada':'(pendiente)'}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+
+            {/* Monto libre */}
+            <Field label="Monto a pagar ($)" hint={'Default: '+formatDinero(montoDefault)+' — cambia si el cliente pagó diferente'}>
+              <input className="input" type="number" inputMode="numeric"
+                value={fpago.montoLibre}
+                onChange={e => setFpago({...fpago,montoLibre:e.target.value})}
+                placeholder={String(montoDefault)} />
+            </Field>
+
+            <Field label="Estado del pago">
               <select className="input" value={fpago.pagadoVendedor} onChange={e => setFpago({...fpago,pagadoVendedor:e.target.value==='true'})}>
-                <option value="false">⏳ Pendiente de pago</option>
-                <option value="true">✅ Pagado al vendedor</option>
+                <option value="false">⏳ Pendiente — aún no se le paga al vendedor</option>
+                <option value="true">✅ Pagado — ya se le entregó al vendedor</option>
               </select>
             </Field>
             <Field label="Fecha"><input className="input" type="date" value={fpago.fechaPago} onChange={e => setFpago({...fpago,fechaPago:e.target.value})} /></Field>

@@ -18,238 +18,234 @@ const LogoSVG = ({ size = 30 }) => (
   </svg>
 )
 
+// Estilo de contenedor scrollable compatible iOS + Android
+const scrollBox = {
+  flex: 1,
+  overflowY: 'auto',
+  overflowX: 'hidden',
+  WebkitOverflowScrolling: 'touch',
+  overscrollBehavior: 'contain',
+}
+
 export default function Vendedor() {
   const { user, userData, logout } = useAuth()
   const { show: toast } = useToast()
   const [tab, setTab] = useState('clientes')
   const [clientes, setClientes] = useState([])
   const [mensajes, setMensajes] = useState([])
-
   const [clienteActivo, setClienteActivo] = useState(null)
   const [notas, setNotas] = useState('')
   const [notasEditadas, setNotasEditadas] = useState(false)
   const [guardandoNotas, setGuardandoNotas] = useState(false)
-
   const [filtro, setFiltro] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [copiado, setCopiado] = useState(null)
-
   const [modalNuevoMsg, setModalNuevoMsg] = useState(false)
   const [editandoMsg, setEditandoMsg] = useState(null)
   const [fm, setFm] = useState({ titulo:'', texto:'' })
   const [guardandoMsg, setGuardandoMsg] = useState(false)
-
   const [modalNuevoCliente, setModalNuevoCliente] = useState(false)
   const [fc, setFc] = useState({ nombre:'', telefono:'', notas:'', estado:'nuevo', mensualidad:2000, enganche:0 })
   const [guardandoCliente, setGuardandoCliente] = useState(false)
   const [errorCliente, setErrorCliente] = useState('')
-
   const [modalNombre, setModalNombre] = useState(false)
   const [nuevoNombre, setNuevoNombre] = useState('')
   const [guardandoNombre, setGuardandoNombre] = useState(false)
-
-  // FIX iOS: usar matchMedia en lugar de window.innerWidth para evitar 100vh bug
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 680)
+
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 679px)')
-    const handler = e => setIsMobile(e.matches)
-    mq.addEventListener('change', handler)
+    const h = e => setIsMobile(e.matches)
+    mq.addEventListener('change', h)
     setIsMobile(mq.matches)
-    return () => mq.removeEventListener('change', handler)
+    return () => mq.removeEventListener('change', h)
   }, [])
 
   useEffect(() => {
     if (!user) return
     const u1 = onSnapshot(
-      query(collection(db, 'clientes'), where('vendedorId', '==', user.uid), orderBy('createdAt', 'desc')),
+      query(collection(db,'clientes'), where('vendedorId','==',user.uid), orderBy('createdAt','desc')),
       s => {
-        const data = s.docs.map(d => ({ id: d.id, ...d.data() }))
+        const data = s.docs.map(d => ({ id:d.id,...d.data() }))
         setClientes(data)
         setClienteActivo(prev => {
           if (!prev) return prev
-          const updated = data.find(c => c.id === prev.id)
-          return updated || prev
+          return data.find(c => c.id===prev.id) || prev
         })
       }
     )
     const u2 = onSnapshot(
-      query(collection(db, 'mensajes'), orderBy('orden')),
+      query(collection(db,'mensajes'), orderBy('orden')),
       s => {
-        const todos = s.docs.map(d => ({ id: d.id, ...d.data() }))
-        setMensajes(todos.filter(m => m.vendedorId === 'todos' || m.vendedorId === user.uid))
+        const todos = s.docs.map(d => ({ id:d.id,...d.data() }))
+        setMensajes(todos.filter(m => m.vendedorId==='todos' || m.vendedorId===user.uid))
       }
     )
     return () => { u1(); u2() }
   }, [user])
 
   const filtrados = clientes.filter(c => {
-    if (filtro !== 'todos' && c.estado !== filtro) return false
+    if (filtro!=='todos' && c.estado!==filtro) return false
     if (busqueda && !c.nombre?.toLowerCase().includes(busqueda.toLowerCase()) && !c.telefono?.includes(busqueda)) return false
     return true
   })
+  const conteo = ESTADOS.reduce((a,e) => { a[e.value]=clientes.filter(c=>c.estado===e.value).length; return a }, {})
 
-  const conteo = ESTADOS.reduce((a, e) => { a[e.value] = clientes.filter(c => c.estado === e.value).length; return a }, {})
-
-  const abrirCliente = c => { setClienteActivo(c); setNotas(c.notas || ''); setNotasEditadas(false) }
+  const abrirCliente = c => { setClienteActivo(c); setNotas(c.notas||''); setNotasEditadas(false) }
 
   const cambiarEstado = async estado => {
     if (!clienteActivo) return
     try {
-      await updateDoc(doc(db, 'clientes', clienteActivo.id), { estado, updatedAt: serverTimestamp() })
-      toast('Estado: ' + getEstado(estado).label, 'info')
-    } catch { toast('Error al actualizar', 'error') }
+      await updateDoc(doc(db,'clientes',clienteActivo.id), { estado, updatedAt:serverTimestamp() })
+      toast('Estado: '+getEstado(estado).label, 'info')
+    } catch { toast('Error al actualizar','error') }
   }
 
   const guardarNotas = async () => {
     if (!clienteActivo) return
     setGuardandoNotas(true)
     try {
-      await updateDoc(doc(db, 'clientes', clienteActivo.id), { notas, updatedAt: serverTimestamp() })
-      setNotasEditadas(false)
-      toast('Notas guardadas')
-    } catch { toast('Error al guardar notas', 'error') }
+      await updateDoc(doc(db,'clientes',clienteActivo.id), { notas, updatedAt:serverTimestamp() })
+      setNotasEditadas(false); toast('Notas guardadas')
+    } catch { toast('Error al guardar notas','error') }
     setGuardandoNotas(false)
   }
 
   const abrirNuevoCliente = () => {
-    setFc({ nombre:'', telefono:'', notas:'', estado:'nuevo', mensualidad:2000, enganche:0 })
-    setErrorCliente('')
-    setModalNuevoCliente(true)
+    setFc({ nombre:'',telefono:'',notas:'',estado:'nuevo',mensualidad:2000,enganche:0 })
+    setErrorCliente(''); setModalNuevoCliente(true)
   }
 
   const guardarCliente = async () => {
-    if (!fc.nombre.trim() || !fc.telefono.trim()) return setErrorCliente('Nombre y teléfono son obligatorios')
+    if (!fc.nombre.trim()||!fc.telefono.trim()) return setErrorCliente('Nombre y teléfono son obligatorios')
     if (!user?.uid) return setErrorCliente('Sesión inválida')
     setGuardandoCliente(true); setErrorCliente('')
     try {
-      await addDoc(collection(db, 'clientes'), {
-        nombre: fc.nombre.trim(), telefono: fc.telefono.trim(), notas: fc.notas.trim(),
-        estado: fc.estado, mensualidad: Number(fc.mensualidad) || 2000, enganche: Number(fc.enganche) || 0,
-        vendedorId: user.uid, vendedorNombre: userData?.nombre || '',
-        comision: userData?.comision || 5000, pagosRegistrados: [],
-        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      await addDoc(collection(db,'clientes'), {
+        nombre:fc.nombre.trim(), telefono:fc.telefono.trim(), notas:fc.notas.trim(),
+        estado:fc.estado, mensualidad:Number(fc.mensualidad)||2000, enganche:Number(fc.enganche)||0,
+        vendedorId:user.uid, vendedorNombre:userData?.nombre||'',
+        comision:userData?.comision||5000, pagosRegistrados:[],
+        createdAt:serverTimestamp(), updatedAt:serverTimestamp(),
       })
-      setModalNuevoCliente(false)
-      toast('Cliente agregado')
+      setModalNuevoCliente(false); toast('Cliente agregado')
     } catch { setErrorCliente('Error al guardar. Intenta de nuevo.') }
     setGuardandoCliente(false)
   }
 
   const copiar = m => {
-    const txt = m.texto.replace(/{nombre}/g, clienteActivo?.nombre || 'Cliente')
+    const txt = m.texto.replace(/{nombre}/g, clienteActivo?.nombre||'Cliente')
     navigator.clipboard.writeText(txt).then(() => {
-      setCopiado(m.id); toast('Mensaje copiado', 'info')
+      setCopiado(m.id); toast('Mensaje copiado','info')
       setTimeout(() => setCopiado(null), 2200)
     })
   }
 
   const guardarMensaje = async () => {
-    if (!fm.titulo.trim() || !fm.texto.trim()) return
+    if (!fm.titulo.trim()||!fm.texto.trim()) return
     setGuardandoMsg(true)
     try {
       if (editandoMsg) {
-        await updateDoc(doc(db, 'mensajes', editandoMsg.id), { titulo: fm.titulo, texto: fm.texto })
+        await updateDoc(doc(db,'mensajes',editandoMsg.id), { titulo:fm.titulo,texto:fm.texto })
         toast('Mensaje actualizado')
       } else {
-        await addDoc(collection(db, 'mensajes'), { titulo: fm.titulo, texto: fm.texto, vendedorId: user.uid, orden: mensajes.length })
+        await addDoc(collection(db,'mensajes'), { titulo:fm.titulo,texto:fm.texto,vendedorId:user.uid,orden:mensajes.length })
         toast('Mensaje creado')
       }
-      setModalNuevoMsg(false); setEditandoMsg(null); setFm({ titulo:'', texto:'' })
-    } catch { toast('Error al guardar', 'error') }
+      setModalNuevoMsg(false); setEditandoMsg(null); setFm({ titulo:'',texto:'' })
+    } catch { toast('Error al guardar','error') }
     setGuardandoMsg(false)
   }
 
   const eliminarMensaje = async id => {
     if (!confirm('¿Eliminar este mensaje?')) return
-    try { await deleteDoc(doc(db, 'mensajes', id)); toast('Mensaje eliminado') }
-    catch { toast('Error al eliminar', 'error') }
+    try { await deleteDoc(doc(db,'mensajes',id)); toast('Mensaje eliminado') }
+    catch { toast('Error al eliminar','error') }
   }
 
   const guardarNombre = async () => {
     if (!nuevoNombre.trim()) return
     setGuardandoNombre(true)
     try {
-      await updateDoc(doc(db, 'users', user.uid), { nombre: nuevoNombre.trim() })
+      await updateDoc(doc(db,'users',user.uid), { nombre:nuevoNombre.trim() })
       setModalNombre(false); toast('Nombre actualizado')
-    } catch { toast('Error al actualizar nombre', 'error') }
+    } catch { toast('Error al actualizar nombre','error') }
     setGuardandoNombre(false)
   }
 
-  const comisionVendedor = userData?.comision || 5000
-  const clientesConContrato = clientes.filter(c => c.estado === 'contrato' || c.estado === 'cerrado')
-  const totalGanado = clientesConContrato.reduce((s, c) => {
-    const { comisionCubierta } = calcularComisiones(c.comision || comisionVendedor, c.mensualidad || 2000, c.pagosRegistrados || [])
-    return s + comisionCubierta
-  }, 0)
-  const totalPendiente = clientesConContrato.reduce((s, c) => {
-    const { comisionPendiente } = calcularComisiones(c.comision || comisionVendedor, c.mensualidad || 2000, c.pagosRegistrados || [])
-    return s + comisionPendiente
-  }, 0)
+  const comisionVendedor = userData?.comision||5000
+  const clientesConContrato = clientes.filter(c => c.estado==='contrato'||c.estado==='cerrado')
+  const totalGanado = clientesConContrato.reduce((s,c) => {
+    const { comisionCubierta } = calcularComisiones(c.comision||comisionVendedor,c.mensualidad||2000,c.pagosRegistrados||[])
+    return s+comisionCubierta
+  },0)
+  const totalPendiente = clientesConContrato.reduce((s,c) => {
+    const { comisionPendiente } = calcularComisiones(c.comision||comisionVendedor,c.mensualidad||2000,c.pagosRegistrados||[])
+    return s+comisionPendiente
+  },0)
 
-  // FIX: en mobile, detalle de cliente oculta la lista pero NO oculta navbar ni tabs
-  // FIX: tab mensajes y comisiones siempre muestran navbar completa
-  const enDetalleCliente = isMobile && clienteActivo && tab === 'clientes'
+  const enDetalleCliente = isMobile && clienteActivo && tab==='clientes'
 
   const overlayStyle = { position:'fixed',inset:0,background:'rgba(5,10,7,0.88)',backdropFilter:'blur(10px)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center' }
-  const sheetStyle = { background:'var(--surface)',borderRadius:'22px 22px 0 0',width:'100%',maxWidth:'500px',padding:'20px 20px 0',boxShadow:'0 -12px 48px rgba(0,0,0,0.6)',animation:'slideUp 0.28s ease',maxHeight:'88dvh',overflowY:'auto',paddingBottom:'env(safe-area-inset-bottom, 20px)' }
+  const sheetStyle = { background:'var(--surface)',borderRadius:'22px 22px 0 0',width:'100%',maxWidth:'500px',padding:'20px 20px 0',boxShadow:'0 -12px 48px rgba(0,0,0,0.6)',animation:'slideUp 0.28s ease',maxHeight:'90svh',overflowY:'auto',WebkitOverflowScrolling:'touch',paddingBottom:'max(20px, env(safe-area-inset-bottom))' }
   const handleStyle = { width:'36px',height:'4px',background:'var(--surface4)',borderRadius:'9999px',margin:'0 auto 18px' }
-  const sheetHeaderStyle = { display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px' }
-  const sheetTitleStyle = { fontSize:'16px',fontWeight:'700',color:'var(--text)' }
   const closeBtn = { background:'var(--surface3)',border:'none',borderRadius:'8px',width:'30px',height:'30px',fontSize:'14px',cursor:'pointer',color:'var(--text3)' }
   const fieldLabel = { display:'block',fontSize:'11px',fontWeight:'700',color:'var(--text3)',marginBottom:'5px',textTransform:'uppercase',letterSpacing:'0.5px' }
 
   return (
-    // FIX iOS: 100dvh en lugar de 100vh — respeta la barra del navegador en Safari
-    <div style={{ height:'100dvh',display:'flex',flexDirection:'column',background:'var(--bg)',overflow:'hidden',position:'fixed',inset:0 }}>
+    <div style={{ display:'flex',flexDirection:'column',background:'var(--bg)',height:'100svh',overflow:'hidden' }}>
 
-      {/* Navbar — SIEMPRE visible */}
-      <nav style={{ background:'var(--surface)',padding:'0 16px',height:'52px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,borderBottom:'1px solid var(--border)' }}>
+      {/* Navbar */}
+      <nav style={{ background:'var(--surface)',padding:'0 16px',height:'52px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,borderBottom:'1px solid var(--border)',zIndex:10 }}>
         <div style={{ display:'flex',alignItems:'center',gap:'8px' }}>
-          {/* FIX: botón atrás solo cuando estamos en detalle de cliente en mobile */}
           {enDetalleCliente ? (
             <button onClick={() => setClienteActivo(null)}
-              style={{ background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'8px',padding:'6px 10px',color:'var(--text2)',fontSize:'13px',cursor:'pointer',fontWeight:'600',display:'flex',alignItems:'center',gap:'4px',whiteSpace:'nowrap' }}>
+              style={{ background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'8px',padding:'6px 10px',color:'var(--text2)',fontSize:'13px',cursor:'pointer',fontWeight:'600',display:'flex',alignItems:'center',gap:'4px' }}>
               ← Atrás
             </button>
           ) : (
             <div style={{ display:'flex',alignItems:'center',gap:'8px' }}>
-              <LogoSVG size={30} />
+              <LogoSVG size={28} />
               <span style={{ color:'var(--text)',fontWeight:'800',fontSize:'14px' }}>MyKasa CRM</span>
             </div>
           )}
           {enDetalleCliente && clienteActivo && (
-            <span style={{ color:'var(--text)',fontWeight:'700',fontSize:'14px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'130px' }}>{clienteActivo.nombre}</span>
+            <span style={{ color:'var(--text)',fontWeight:'700',fontSize:'13px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'120px' }}>{clienteActivo.nombre}</span>
           )}
         </div>
         <div style={{ display:'flex',alignItems:'center',gap:'8px' }}>
+          {/* Botón recargar */}
+          <button onClick={() => window.location.reload()}
+            title="Recargar app"
+            style={{ background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'8px',width:'34px',height:'34px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:'14px',color:'var(--text3)',flexShrink:0 }}>
+            ↺
+          </button>
           <button onClick={() => { setNuevoNombre(userData?.nombre||''); setModalNombre(true) }}
             style={{ background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'8px',padding:'5px 10px',display:'flex',alignItems:'center',gap:'6px',cursor:'pointer' }}>
             <div style={{ width:'22px',height:'22px',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',color:'white',fontWeight:'800',fontSize:'10px',flexShrink:0 }}>{userData?.nombre?.charAt(0)}</div>
             <span style={{ color:'var(--text2)',fontSize:'12px',fontWeight:'600',maxWidth:'70px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{userData?.nombre}</span>
-            <span style={{ fontSize:'11px' }}>✏️</span>
           </button>
           <button onClick={logout} style={{ background:'var(--red-bg)',color:'var(--red)',border:'1px solid var(--red-border)',borderRadius:'7px',padding:'6px 10px',fontSize:'12px',fontWeight:'600',cursor:'pointer' }}>Salir</button>
         </div>
       </nav>
 
-      {/* Tabs — SIEMPRE visibles (incluso en detalle cliente) */}
-      <div style={{ background:'var(--bg2)',padding:'0 16px',display:'flex',gap:'0',borderBottom:'1px solid var(--border)',flexShrink:0,overflowX:'auto',scrollbarWidth:'none' }}>
+      {/* Tabs */}
+      <div style={{ background:'var(--bg2)',padding:'0 16px',display:'flex',borderBottom:'1px solid var(--border)',flexShrink:0,overflowX:'auto',scrollbarWidth:'none' }}>
         {TABS_V.map(([key,icon,label]) => (
-          <button key={key} onClick={() => { setTab(key); if(key !== 'clientes') setClienteActivo(null) }}
+          <button key={key} onClick={() => { setTab(key); if(key!=='clientes') setClienteActivo(null) }}
             style={{ background:'transparent',color:tab===key?'var(--accent)':'var(--text3)',border:'none',borderBottom:'2px solid '+(tab===key?'var(--accent)':'transparent'),padding:'10px 14px',fontSize:'12px',fontWeight:tab===key?'700':'500',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',whiteSpace:'nowrap',transition:'all 0.15s',flexShrink:0 }}>
-            <span style={{ fontSize:'13px' }}>{icon}</span>
-            <span>{label}</span>
+            <span>{icon}</span><span>{label}</span>
           </button>
         ))}
       </div>
 
       {/* ===== TAB CLIENTES ===== */}
-      {tab === 'clientes' && (
-        <div style={{ display:'flex',flex:1,overflow:'hidden',minHeight:0 }}>
+      {tab==='clientes' && (
+        <div style={{ display:'flex',flex:1,minHeight:0,overflow:'hidden' }}>
 
-          {/* Lista — oculta en mobile cuando hay cliente activo */}
-          {(!enDetalleCliente) && (
-            <div style={{ width:isMobile?'100%':'300px',flexShrink:0,background:'var(--bg)',borderRight:isMobile?'none':'1px solid var(--border)',display:'flex',flexDirection:'column',overflow:'hidden' }}>
+          {/* Lista */}
+          {!enDetalleCliente && (
+            <div style={{ width:isMobile?'100%':'300px',flexShrink:0,display:'flex',flexDirection:'column',minHeight:0,borderRight:isMobile?'none':'1px solid var(--border)' }}>
               <div style={{ padding:'10px',borderBottom:'1px solid var(--border)',background:'var(--bg2)',flexShrink:0 }}>
                 <div style={{ display:'flex',gap:'8px',marginBottom:'8px',alignItems:'center' }}>
                   <div style={{ position:'relative',flex:1 }}>
@@ -258,24 +254,23 @@ export default function Vendedor() {
                   </div>
                   <button onClick={abrirNuevoCliente} className="btn btn-primary btn-sm" style={{ whiteSpace:'nowrap',flexShrink:0 }}>＋ Nuevo</button>
                 </div>
-                <div style={{ display:'flex',gap:'4px',flexWrap:'wrap' }}>
+                <div style={{ display:'flex',gap:'4px',overflowX:'auto',scrollbarWidth:'none',paddingBottom:'2px' }}>
                   <FiltroChip label={'Todos ('+clientes.length+')'} activo={filtro==='todos'} onClick={() => setFiltro('todos')} />
                   {ESTADOS.map(e => (
-                    <FiltroChip key={e.value} label={e.icon+' '+e.label+' ('+( conteo[e.value]||0)+')'} activo={filtro===e.value} onClick={() => setFiltro(filtro===e.value?'todos':e.value)} color={e.color} />
+                    <FiltroChip key={e.value} label={e.icon+' '+e.label+' ('+(conteo[e.value]||0)+')'} activo={filtro===e.value} onClick={() => setFiltro(filtro===e.value?'todos':e.value)} color={e.color} />
                   ))}
                 </div>
               </div>
-
-              <div style={{ overflowY:'scroll',flex:1,background:'var(--bg)',WebkitOverflowScrolling:'touch',minHeight:0 }}>
-                {filtrados.length === 0 && (
+              <div style={{ ...scrollBox, background:'var(--bg)' }}>
+                {filtrados.length===0 && (
                   <div style={{ padding:'48px 16px',textAlign:'center' }}>
                     <div style={{ fontSize:'36px',marginBottom:'8px' }}>{clientes.length===0?'📭':'🔍'}</div>
-                    <p style={{ color:'var(--text3)',fontSize:'13px' }}>{clientes.length===0?'Aún no tienes clientes asignados':'Sin resultados'}</p>
+                    <p style={{ color:'var(--text3)',fontSize:'13px' }}>{clientes.length===0?'Aún no tienes clientes':'Sin resultados'}</p>
                   </div>
                 )}
                 {filtrados.map(c => {
                   const est = getEstado(c.estado)
-                  const esActivo = clienteActivo?.id === c.id && !isMobile
+                  const esActivo = clienteActivo?.id===c.id && !isMobile
                   return (
                     <div key={c.id} onClick={() => abrirCliente(c)}
                       style={{ padding:'12px 14px',borderBottom:'1px solid var(--border)',cursor:'pointer',background:esActivo?'var(--surface3)':'var(--bg2)',borderLeft:'3px solid '+(esActivo?est.color:'transparent'),transition:'background 0.15s' }}
@@ -288,25 +283,23 @@ export default function Vendedor() {
                       <div style={{ fontSize:'11px',color:'var(--text3)',marginBottom:'2px' }}>📱 {c.telefono}</div>
                       <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center' }}>
                         <div style={{ fontSize:'10px',color:'var(--text4)' }}>{timeAgo(c.createdAt)}</div>
-                        {c.mensualidad > 0 && <div style={{ fontSize:'10px',color:'var(--text3)',fontWeight:'600' }}>💵 {formatDinero(c.mensualidad)}/mes</div>}
+                        {c.mensualidad>0 && <div style={{ fontSize:'10px',color:'var(--text3)',fontWeight:'600' }}>💵 {formatDinero(c.mensualidad)}/mes</div>}
                       </div>
                       {c.notas && <div style={{ fontSize:'10px',color:'var(--text3)',marginTop:'4px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',background:'var(--surface3)',padding:'2px 7px',borderRadius:'4px' }}>📝 {c.notas}</div>}
                     </div>
                   )
                 })}
-                {/* FIX iOS: padding extra al final para que el último item no quede tapado */}
-                <div style={{ height:'env(safe-area-inset-bottom, 16px)', minHeight:'16px' }} />
+                <div style={{ height:'24px' }} />
               </div>
             </div>
           )}
 
-          {/* Detalle cliente */}
+          {/* Detalle */}
           {clienteActivo && (isMobile ? enDetalleCliente : true) && (() => {
             const est = getEstado(clienteActivo.estado)
             return (
-              <div style={{ flex:1,overflowY:'scroll',WebkitOverflowScrolling:'touch',padding:'12px',display:'flex',flexDirection:'column',gap:'10px',minWidth:0,background:'var(--bg)',paddingBottom:'calc(80px + env(safe-area-inset-bottom, 0px))',minHeight:0 }} className="fade-in">
+              <div style={{ ...scrollBox, flex:1, padding:'12px', display:'flex', flexDirection:'column', gap:'10px', background:'var(--bg)' }} className="fade-in">
 
-                {/* Header */}
                 <div className="card" style={{ padding:'13px 14px' }}>
                   <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'8px' }}>
                     <div style={{ display:'flex',alignItems:'center',gap:'10px',minWidth:0 }}>
@@ -317,7 +310,7 @@ export default function Vendedor() {
                         <h2 style={{ fontSize:'15px',fontWeight:'800',marginBottom:'2px',color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{clienteActivo.nombre}</h2>
                         <div style={{ fontSize:'11px',color:'var(--text3)',display:'flex',gap:'8px',flexWrap:'wrap' }}>
                           <span>📱 {clienteActivo.telefono}</span>
-                          {clienteActivo.mensualidad > 0 && <span>💵 {formatDinero(clienteActivo.mensualidad)}/mes</span>}
+                          {clienteActivo.mensualidad>0 && <span>💵 {formatDinero(clienteActivo.mensualidad)}/mes</span>}
                           <span>📅 {formatFecha(clienteActivo.createdAt)}</span>
                         </div>
                       </div>
@@ -329,11 +322,9 @@ export default function Vendedor() {
                   </div>
                 </div>
 
-                {/* Estado */}
                 <div className="card" style={{ padding:'12px 14px' }}>
                   <p style={{ fontSize:'10px',fontWeight:'700',color:'var(--text3)',marginBottom:'8px',textTransform:'uppercase',letterSpacing:'0.5px' }}>Estado del cliente</p>
-                  {/* FIX: scroll horizontal en lugar de wrap para no amontonar */}
-                  <div style={{ display:'flex',gap:'6px',overflowX:'auto',scrollbarWidth:'none',paddingBottom:'2px',WebkitOverflowScrolling:'touch' }}>
+                  <div style={{ display:'flex',gap:'6px',overflowX:'auto',scrollbarWidth:'none',paddingBottom:'2px' }}>
                     {ESTADOS.map(e => (
                       <button key={e.value} onClick={() => cambiarEstado(e.value)}
                         style={{ padding:'6px 11px',borderRadius:'var(--r-full)',border:'2px solid '+(clienteActivo.estado===e.value?e.color:'var(--border)'),background:clienteActivo.estado===e.value?e.color+'22':'transparent',color:clienteActivo.estado===e.value?e.color:'var(--text3)',fontSize:'12px',fontWeight:'700',cursor:'pointer',transition:'var(--t)',whiteSpace:'nowrap',flexShrink:0 }}>
@@ -343,7 +334,24 @@ export default function Vendedor() {
                   </div>
                 </div>
 
-                {/* Mensajes */}
+                {/* Apartado info */}
+                {clienteActivo.montoApartado > 0 && (() => {
+                  const v = calcularVigenciaApartado(clienteActivo.montoApartado, clienteActivo.createdAt)
+                  if (!v) return null
+                  return (
+                    <div className="card" style={{ padding:'12px 14px',background:v.vencido?'rgba(248,113,113,0.06)':'rgba(251,146,60,0.06)',border:'1px solid '+(v.vencido?'rgba(248,113,113,0.2)':'rgba(251,146,60,0.2)') }}>
+                      <p style={{ fontSize:'10px',fontWeight:'700',color:v.vencido?'var(--red)':'var(--orange)',marginBottom:'8px',textTransform:'uppercase',letterSpacing:'0.5px' }}>🔒 Apartado</p>
+                      <div style={{ display:'flex',gap:'12px',flexWrap:'wrap',fontSize:'12px',color:'var(--text2)' }}>
+                        <span>💵 <strong>{formatDinero(clienteActivo.montoApartado)}</strong></span>
+                        <span>📅 <strong>{v.dias} días</strong> de vigencia</span>
+                        <span style={{ fontWeight:'700',color:v.vencido?'var(--red)':'var(--accent)' }}>
+                          {v.vencido?'⚠️ Venció hace '+Math.abs(v.restantes)+'d':'✅ Vence en '+v.restantes+'d'}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })()}
+
                 <div className="card" style={{ padding:'12px 14px' }}>
                   <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px' }}>
                     <p style={{ fontSize:'10px',fontWeight:'700',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'0.5px' }}>Mensajes predefinidos</p>
@@ -353,11 +361,11 @@ export default function Vendedor() {
                     {mensajes.length===0 && <p style={{ fontSize:'12px',color:'var(--text4)',textAlign:'center',padding:'16px' }}>Sin mensajes configurados</p>}
                     {mensajes.map(m => {
                       const txt = m.texto.replace(/{nombre}/g, clienteActivo.nombre)
-                      const esCop = copiado === m.id
-                      const esMio = m.vendedorId === user.uid
+                      const esCop = copiado===m.id
+                      const esMio = m.vendedorId===user.uid
                       return (
                         <div key={m.id} style={{ background:'var(--surface2)',borderRadius:'10px',padding:'10px 12px',border:'1px solid var(--border)' }}>
-                          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px',flexWrap:'wrap',gap:'4px' }}>
+                          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px',gap:'4px',flexWrap:'wrap' }}>
                             <div style={{ display:'flex',alignItems:'center',gap:'5px' }}>
                               <span style={{ fontWeight:'700',fontSize:'12px',color:'var(--text)' }}>{m.titulo}</span>
                               {!esMio && <span style={{ fontSize:'9px',background:'rgba(74,222,128,0.1)',color:'var(--accent)',padding:'1px 6px',borderRadius:'10px',fontWeight:'700' }}>General</span>}
@@ -370,9 +378,9 @@ export default function Vendedor() {
                                 </>
                               )}
                               <button onClick={() => copiar(m)} style={{ background:esCop?'rgba(34,197,94,0.15)':'var(--surface3)',color:esCop?'var(--accent)':'var(--text3)',border:'1px solid '+(esCop?'rgba(74,222,128,0.3)':'var(--border)'),borderRadius:'6px',padding:'4px 9px',fontSize:'11px',fontWeight:'700',cursor:'pointer',display:'flex',alignItems:'center',gap:'3px' }}>
-                                {esCop ? '✓' : '📋'}
+                                {esCop?'✓':'📋'}
                               </button>
-                              <button onClick={() => abrirWhatsApp(clienteActivo.telefono, txt)} style={{ background:'rgba(37,211,102,0.1)',color:'#25d366',border:'1px solid rgba(37,211,102,0.2)',borderRadius:'6px',padding:'4px 9px',fontSize:'11px',fontWeight:'700',cursor:'pointer' }}>📱</button>
+                              <button onClick={() => abrirWhatsApp(clienteActivo.telefono,txt)} style={{ background:'rgba(37,211,102,0.1)',color:'#25d366',border:'1px solid rgba(37,211,102,0.2)',borderRadius:'6px',padding:'4px 9px',fontSize:'11px',fontWeight:'700',cursor:'pointer' }}>📱</button>
                             </div>
                           </div>
                           <p style={{ fontSize:'11px',color:'var(--text2)',lineHeight:'1.55',margin:0 }}>{txt}</p>
@@ -382,25 +390,6 @@ export default function Vendedor() {
                   </div>
                 </div>
 
-                {/* Apartado */}
-                {clienteActivo.montoApartado > 0 && (() => {
-                  const v = calcularVigenciaApartado(clienteActivo.montoApartado, clienteActivo.createdAt)
-                  if (!v) return null
-                  return (
-                    <div className="card" style={{ padding:'12px 14px',background:v.vencido?'rgba(248,113,113,0.06)':'rgba(251,146,60,0.06)',border:'1px solid '+(v.vencido?'rgba(248,113,113,0.2)':'rgba(251,146,60,0.2)') }}>
-                      <p style={{ fontSize:'10px',fontWeight:'700',color:v.vencido?'var(--red)':'var(--orange)',marginBottom:'8px',textTransform:'uppercase',letterSpacing:'0.5px' }}>🔒 Apartado</p>
-                      <div style={{ display:'flex',gap:'12px',flexWrap:'wrap',fontSize:'12px',color:'var(--text2)' }}>
-                        <span>💵 <strong>{formatDinero(clienteActivo.montoApartado)}</strong></span>
-                        <span>📅 <strong>{v.dias} días</strong></span>
-                        <span style={{ fontWeight:'700',color:v.vencido?'var(--red)':'var(--accent)' }}>
-                          {v.vencido ? '⚠️ Venció hace '+Math.abs(v.restantes)+'d' : '✅ Vence en '+v.restantes+'d'}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })()}
-
-                {/* Notas */}
                 <div className="card" style={{ padding:'12px 14px' }}>
                   <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px' }}>
                     <p style={{ fontSize:'10px',fontWeight:'700',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'0.5px' }}>Notas</p>
@@ -411,9 +400,10 @@ export default function Vendedor() {
                     rows={3} className="input" style={{ resize:'vertical',marginBottom:'8px',fontSize:'13px' }} />
                   <button onClick={guardarNotas} disabled={guardandoNotas||!notasEditadas} className="btn btn-primary btn-sm"
                     style={{ opacity:(guardandoNotas||!notasEditadas)?0.6:1,cursor:(guardandoNotas||!notasEditadas)?'not-allowed':'pointer',display:'flex',alignItems:'center',gap:'6px' }}>
-                    {guardandoNotas ? <><div className="spinner" style={{ width:'14px',height:'14px' }} /><span>Guardando...</span></> : '💾 Guardar notas'}
+                    {guardandoNotas?<><div className="spinner" style={{ width:'14px',height:'14px' }} /><span>Guardando...</span></>:'💾 Guardar notas'}
                   </button>
                 </div>
+                <div style={{ height:'24px' }} />
               </div>
             )
           })()}
@@ -421,8 +411,8 @@ export default function Vendedor() {
       )}
 
       {/* ===== TAB MENSAJES ===== */}
-      {tab === 'mensajes' && (
-        <div style={{ flex:1,overflowY:'scroll',WebkitOverflowScrolling:'touch',padding:'16px',background:'var(--bg)',paddingBottom:'calc(80px + env(safe-area-inset-bottom, 0px))',minHeight:0 }} className="fade-in">
+      {tab==='mensajes' && (
+        <div style={{ ...scrollBox, flex:1, padding:'16px', background:'var(--bg)' }} className="fade-in">
           <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px' }}>
             <div>
               <h2 style={{ fontSize:'16px',fontWeight:'800',marginBottom:'2px',color:'var(--text)' }}>Mis mensajes</h2>
@@ -430,8 +420,7 @@ export default function Vendedor() {
             </div>
             <button className="btn btn-primary btn-sm" onClick={() => { setEditandoMsg(null); setFm({titulo:'',texto:''}); setModalNuevoMsg(true) }}>＋ Nuevo</button>
           </div>
-
-          {mensajes.filter(m => m.vendedorId === user.uid).length === 0 ? (
+          {mensajes.filter(m=>m.vendedorId===user.uid).length===0 ? (
             <div className="card" style={{ padding:'40px',textAlign:'center',marginBottom:'20px' }}>
               <div style={{ fontSize:'36px',marginBottom:'8px' }}>💬</div>
               <p style={{ color:'var(--text3)',fontSize:'13px',marginBottom:'12px' }}>Aún no tienes mensajes personalizados</p>
@@ -439,7 +428,7 @@ export default function Vendedor() {
             </div>
           ) : (
             <div style={{ display:'flex',flexDirection:'column',gap:'10px',marginBottom:'20px' }}>
-              {mensajes.filter(m => m.vendedorId === user.uid).map(m => (
+              {mensajes.filter(m=>m.vendedorId===user.uid).map(m => (
                 <div key={m.id} className="card" style={{ padding:'14px 16px' }}>
                   <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px',gap:'8px' }}>
                     <span style={{ fontWeight:'700',fontSize:'14px',color:'var(--text)' }}>{m.titulo}</span>
@@ -449,17 +438,16 @@ export default function Vendedor() {
                     </div>
                   </div>
                   <p style={{ fontSize:'12px',color:'var(--text2)',lineHeight:'1.6',whiteSpace:'pre-wrap',background:'var(--surface2)',padding:'10px 12px',borderRadius:'8px',margin:0 }}>{m.texto}</p>
-                  <p style={{ fontSize:'10px',color:'var(--text4)',marginTop:'6px' }}>Usa {'{nombre}'} para insertar el nombre del cliente</p>
+                  <p style={{ fontSize:'10px',color:'var(--text4)',marginTop:'6px' }}>Usa {'{nombre}'} para el nombre del cliente</p>
                 </div>
               ))}
             </div>
           )}
-
-          {mensajes.filter(m => m.vendedorId === 'todos').length > 0 && (
+          {mensajes.filter(m=>m.vendedorId==='todos').length>0 && (
             <>
               <h3 style={{ fontSize:'12px',fontWeight:'700',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:'10px' }}>Mensajes generales</h3>
               <div style={{ display:'flex',flexDirection:'column',gap:'8px' }}>
-                {mensajes.filter(m => m.vendedorId === 'todos').map(m => (
+                {mensajes.filter(m=>m.vendedorId==='todos').map(m => (
                   <div key={m.id} className="card" style={{ padding:'12px 14px',opacity:0.85 }}>
                     <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px' }}>
                       <span style={{ fontWeight:'700',fontSize:'13px',color:'var(--text)' }}>{m.titulo}</span>
@@ -471,12 +459,13 @@ export default function Vendedor() {
               </div>
             </>
           )}
+          <div style={{ height:'24px' }} />
         </div>
       )}
 
       {/* ===== TAB COMISIONES ===== */}
-      {tab === 'comisiones' && (
-        <div style={{ flex:1,overflowY:'scroll',WebkitOverflowScrolling:'touch',padding:'16px',background:'var(--bg)',paddingBottom:'calc(80px + env(safe-area-inset-bottom, 0px))',minHeight:0 }} className="fade-in">
+      {tab==='comisiones' && (
+        <div style={{ ...scrollBox, flex:1, padding:'16px', background:'var(--bg)' }} className="fade-in">
           <div style={{ display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'10px',marginBottom:'20px' }}>
             {[
               { label:'Total cobrado',value:formatDinero(totalGanado),color:'var(--accent)',gradLeft:'#2d6a4f',gradRight:'#4ade80',icon:'💰' },
@@ -492,16 +481,14 @@ export default function Vendedor() {
               </div>
             ))}
           </div>
-
           <h3 style={{ fontSize:'14px',fontWeight:'700',marginBottom:'12px',color:'var(--text2)' }}>Detalle por cliente</h3>
-
-          {clientesConContrato.length === 0
+          {clientesConContrato.length===0
             ? <div className="card" style={{ padding:'40px',textAlign:'center' }}><div style={{ fontSize:'36px',marginBottom:'8px' }}>💼</div><p style={{ color:'var(--text3)',fontSize:'13px' }}>Sin ventas cerradas aún</p></div>
             : <div style={{ display:'flex',flexDirection:'column',gap:'10px' }}>
               {clientesConContrato.map(c => {
                 const { pagos,comisionTotal,comisionCubierta,comisionPendiente } = calcularComisiones(c.comision||comisionVendedor,c.mensualidad||2000,c.pagosRegistrados||[])
-                const pct = comisionTotal>0 ? Math.round((comisionCubierta/comisionTotal)*100) : 0
-                const pagosVendedor = pagos.filter(p => p.montoVendedor>0)
+                const pct = comisionTotal>0?Math.round((comisionCubierta/comisionTotal)*100):0
+                const pagosVendedor = pagos.filter(p=>p.montoVendedor>0)
                 return (
                   <div key={c.id} className="card" style={{ padding:'13px 14px' }}>
                     <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'10px',gap:'8px' }}>
@@ -513,7 +500,7 @@ export default function Vendedor() {
                         </div>
                       </div>
                       <div style={{ textAlign:'right',flexShrink:0 }}>
-                        <div style={{ fontSize:'10px',color:'var(--text3)' }}>Comisión</div>
+                        <div style={{ fontSize:'10px',color:'var(--text3)' }}>Mi comisión</div>
                         <div style={{ fontWeight:'800',fontSize:'16px',color:'var(--accent)' }}>{formatDinero(comisionTotal)}</div>
                       </div>
                     </div>
@@ -532,7 +519,7 @@ export default function Vendedor() {
                         <div key={i} style={{ padding:'4px 8px',borderRadius:'7px',fontSize:'10px',fontWeight:'700',display:'flex',alignItems:'center',gap:'3px',background:p.pagadoVendedor?'rgba(34,197,94,0.1)':'rgba(251,191,36,0.1)',color:p.pagadoVendedor?'var(--accent)':'var(--yellow)',border:'1px solid '+(p.pagadoVendedor?'rgba(74,222,128,0.2)':'rgba(251,191,36,0.2)') }}>
                           {p.tipo==='enganche'?'🤝 Eng':'M'+p.numero}
                           <span>{formatDinero(p.montoVendedor)}</span>
-                          {p.pagadoVendedor ? <span>✓</span> : <span style={{ opacity:.6 }}>⏳</span>}
+                          {p.pagadoVendedor?<span>✓</span>:<span style={{ opacity:.6 }}>⏳</span>}
                         </div>
                       ))}
                     </div>
@@ -541,6 +528,7 @@ export default function Vendedor() {
               })}
             </div>
           }
+          <div style={{ height:'24px' }} />
         </div>
       )}
 
@@ -549,8 +537,8 @@ export default function Vendedor() {
         <div onClick={e => { if(e.target===e.currentTarget) setModalNuevoCliente(false) }} style={overlayStyle}>
           <div style={sheetStyle}>
             <div style={handleStyle} />
-            <div style={sheetHeaderStyle}>
-              <h3 style={sheetTitleStyle}>Nuevo cliente</h3>
+            <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px' }}>
+              <h3 style={{ fontSize:'16px',fontWeight:'700',color:'var(--text)' }}>Nuevo cliente</h3>
               <button onClick={() => setModalNuevoCliente(false)} style={closeBtn}>✕</button>
             </div>
             {[{label:'Nombre completo *',key:'nombre',placeholder:'Ej: Juan García',type:'text'},{label:'Teléfono *',key:'telefono',placeholder:'Ej: 5512345678',type:'tel'}].map(({label,key,placeholder,type}) => (
@@ -577,20 +565,20 @@ export default function Vendedor() {
             <div style={{ display:'flex',gap:'8px',paddingBottom:'8px' }}>
               <button onClick={() => setModalNuevoCliente(false)} className="btn btn-secondary" style={{ flex:1 }}>Cancelar</button>
               <button onClick={guardarCliente} disabled={guardandoCliente} className="btn btn-primary" style={{ flex:1,opacity:guardandoCliente?0.7:1 }}>
-                {guardandoCliente ? <><div className="spinner" style={{ width:'16px',height:'16px' }} /><span>Guardando...</span></> : 'Agregar'}
+                {guardandoCliente?<><div className="spinner" style={{ width:'16px',height:'16px' }} /><span>Guardando...</span></>:'Agregar'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal nuevo/editar mensaje */}
+      {/* Modal mensaje */}
       {modalNuevoMsg && (
         <div onClick={e => { if(e.target===e.currentTarget){setModalNuevoMsg(false);setEditandoMsg(null)} }} style={overlayStyle}>
           <div style={sheetStyle}>
             <div style={handleStyle} />
-            <div style={sheetHeaderStyle}>
-              <h3 style={sheetTitleStyle}>{editandoMsg?'Editar mensaje':'Nuevo mensaje'}</h3>
+            <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px' }}>
+              <h3 style={{ fontSize:'16px',fontWeight:'700',color:'var(--text)' }}>{editandoMsg?'Editar mensaje':'Nuevo mensaje'}</h3>
               <button onClick={() => { setModalNuevoMsg(false); setEditandoMsg(null) }} style={closeBtn}>✕</button>
             </div>
             <div style={{ marginBottom:'12px' }}>
@@ -600,12 +588,12 @@ export default function Vendedor() {
             <div style={{ marginBottom:'16px' }}>
               <label style={fieldLabel}>Texto *</label>
               <textarea className="input" value={fm.texto} onChange={e => setFm({...fm,texto:e.target.value})} rows={4} style={{ resize:'none',fontSize:'13px' }} placeholder="Hola {nombre}, ..." />
-              <p style={{ fontSize:'10px',color:'var(--text4)',marginTop:'4px' }}>Usa {'{nombre}'} para insertar el nombre</p>
+              <p style={{ fontSize:'10px',color:'var(--text4)',marginTop:'4px' }}>Usa {'{nombre}'} para el nombre del cliente</p>
             </div>
             <div style={{ display:'flex',gap:'8px',paddingBottom:'8px' }}>
               <button onClick={() => { setModalNuevoMsg(false); setEditandoMsg(null) }} className="btn btn-secondary" style={{ flex:1 }}>Cancelar</button>
               <button onClick={guardarMensaje} disabled={guardandoMsg||!fm.titulo.trim()||!fm.texto.trim()} className="btn btn-primary" style={{ flex:1,opacity:(guardandoMsg||!fm.titulo.trim()||!fm.texto.trim())?0.6:1 }}>
-                {guardandoMsg ? <><div className="spinner" style={{ width:'16px',height:'16px' }} /><span>Guardando...</span></> : 'Guardar'}
+                {guardandoMsg?<><div className="spinner" style={{ width:'16px',height:'16px' }} /><span>Guardando...</span></>:'Guardar'}
               </button>
             </div>
           </div>
@@ -623,7 +611,7 @@ export default function Vendedor() {
             <div style={{ display:'flex',gap:'8px' }}>
               <button onClick={() => setModalNombre(false)} className="btn btn-secondary" style={{ flex:1 }}>Cancelar</button>
               <button onClick={guardarNombre} disabled={guardandoNombre||!nuevoNombre.trim()} className="btn btn-primary" style={{ flex:1,opacity:(guardandoNombre||!nuevoNombre.trim())?0.6:1 }}>
-                {guardandoNombre ? <><div className="spinner" style={{ width:'16px',height:'16px' }} /><span>Guardando...</span></> : 'Guardar'}
+                {guardandoNombre?<><div className="spinner" style={{ width:'16px',height:'16px' }} /><span>Guardando...</span></>:'Guardar'}
               </button>
             </div>
           </div>
