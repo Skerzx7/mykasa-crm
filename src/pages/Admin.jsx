@@ -117,7 +117,7 @@ export default function Admin() {
   const [modalLote, setModalLote] = useState(false)
   const [editandoLote, setEditandoLote] = useState(null)
   const [editando, setEditando] = useState(null)
-  const [fc, setFc] = useState({ nombre:'',telefono:'',notas:'',estado:'nuevo',vendedorId:'',mensualidad:2000,enganche:0,loteId:'',loteNombre:'',montoApartado:'' })
+  const [fc, setFc] = useState({ nombre:'',telefono:'',notas:'',estado:'nuevo',vendedorId:'',mensualidad:2000,enganche:0,loteNombre:'',montoApartado:'',fuente:'' })
   const [fv, setFv] = useState({ nombre:'',pin:'',comision:'5000' })
   const [fedit, setFedit] = useState({ nombre:'',pin:'',comision:'' })
   const [fm, setFm] = useState({ titulo:'',texto:'',vendedorId:'todos' })
@@ -164,18 +164,18 @@ export default function Admin() {
 
   const abrirNuevoCliente = () => {
     setEditando(null)
-    setFc({nombre:'',telefono:'',notas:'',estado:'nuevo',vendedorId:'',mensualidad:2000,enganche:0,loteId:'',loteNombre:'',montoApartado:''})
+    setFc({nombre:'',telefono:'',notas:'',estado:'nuevo',vendedorId:'',mensualidad:2000,enganche:0,loteNombre:'',montoApartado:'',fuente:''})
     setError(''); setModalCliente(true)
   }
   const abrirEditarCliente = useCallback((c, e) => {
     if (e) e.stopPropagation()
     setEditando(c)
-    setFc({nombre:c.nombre||'',telefono:c.telefono||'',notas:c.notas||'',estado:c.estado||'nuevo',vendedorId:c.vendedorId||'',mensualidad:c.mensualidad||2000,enganche:c.enganche||0,loteId:c.loteId||'',loteNombre:c.loteNombre||'',montoApartado:c.montoApartado||''})
+    setFc({nombre:c.nombre||'',telefono:c.telefono||'',notas:c.notas||'',estado:c.estado||'nuevo',vendedorId:c.vendedorId||'',mensualidad:c.mensualidad||2000,enganche:c.enganche||0,loteNombre:c.loteNombre||'',montoApartado:c.montoApartado||'',fuente:c.fuente||''})
     setError(''); setModalCliente(true)
   }, [])
 
   const guardarCliente = async () => {
-    if (!fc.nombre.trim() || !fc.telefono.trim()) return setError('Nombre y teléfono son obligatorios')
+    if (!fc.nombre.trim()) return setError('El nombre es obligatorio')
     setCargando(true); setError('')
     try {
       const v = vendedores.find(x => x.id===fc.vendedorId)
@@ -183,7 +183,8 @@ export default function Admin() {
         nombre:fc.nombre.trim(), telefono:fc.telefono.trim(), notas:fc.notas.trim(),
         estado:fc.estado, vendedorId:fc.vendedorId||'', vendedorNombre:v?.nombre||'',
         mensualidad:Number(fc.mensualidad)||2000, enganche:Number(fc.enganche)||0,
-        montoApartado:Number(fc.montoApartado)||0, loteId:fc.loteId||'', loteNombre:fc.loteNombre||'',
+        montoApartado:Number(fc.montoApartado)||0, loteNombre:fc.loteNombre||'',
+        fuente:fc.fuente||'',
         comision:v?.comision||5000, pagosRegistrados:editando?.pagosRegistrados||[], updatedAt:serverTimestamp(),
       }
       if (editando) {
@@ -211,8 +212,13 @@ export default function Admin() {
 
   const cambiarEstado = async (id, estado) => {
     try {
-      await updateDoc(doc(db,'clientes',id), {estado, updatedAt:serverTimestamp()})
-      if (modalDetalle?.id===id) setModalDetalle(p => ({...p,estado}))
+      const updates = {estado, updatedAt:serverTimestamp()}
+      // Al firmar contrato limpiar apartado
+      if (estado === 'contrato' || estado === 'cerrado') {
+        updates.montoApartado = 0
+      }
+      await updateDoc(doc(db,'clientes',id), updates)
+      if (modalDetalle?.id===id) setModalDetalle(p => ({...p,...updates}))
       toast('Estado: '+getEstado(estado).label, 'info')
     } catch { toast('Error al actualizar estado','error') }
   }
@@ -220,7 +226,6 @@ export default function Admin() {
   const guardarVendedor = async () => {
     if (!fv.nombre.trim()) return setError('El nombre es obligatorio')
     if (!fv.pin || fv.pin.length!==4 || !/^\d{4}$/.test(fv.pin)) return setError('El PIN debe ser exactamente 4 dígitos')
-    if (!fv.comision || isNaN(Number(fv.comision)) || Number(fv.comision)<=0) return setError('La comisión debe ser mayor a 0')
     const pinExiste = vendedores.find(v => v.pin===fv.pin)
     if (pinExiste) return setError('El PIN '+fv.pin+' ya está en uso por '+pinExiste.nombre)
     setCargando(true); setError('')
@@ -237,7 +242,7 @@ export default function Admin() {
           uid = data.localId
         } else { throw e }
       }
-      await setDoc(doc(db,'users',uid), {nombre:fv.nombre.trim(),email,role:'vendedor',comision:Number(fv.comision),pin:fv.pin,createdAt:serverTimestamp()})
+      await setDoc(doc(db,'users',uid), {nombre:fv.nombre.trim(),email,role:'vendedor',comision:Number(fv.comision)||0,pin:fv.pin,createdAt:serverTimestamp()})
       setModalVendedor(false); setFv({nombre:'',pin:'',comision:'5000'})
       toast('Vendedor '+fv.nombre+' creado')
     } catch (e) { setError('Error: '+(e.message||e.code)) }
@@ -255,7 +260,6 @@ export default function Admin() {
       const pinExiste = vendedores.find(v => v.pin===fedit.pin && v.id!==modalEditarVendedor.id)
       if (pinExiste) return setError('El PIN '+fedit.pin+' ya está en uso por '+pinExiste.nombre)
     }
-    if (!fedit.comision || isNaN(Number(fedit.comision)) || Number(fedit.comision)<=0) return setError('La comisión debe ser mayor a 0')
     setCargando(true); setError('')
     try {
       const updates = {nombre:fedit.nombre.trim(),comision:Number(fedit.comision),updatedAt:serverTimestamp()}
@@ -579,10 +583,8 @@ export default function Admin() {
                     <div style={{ display:'flex',gap:'6px',flexWrap:'wrap' }}>
                       {pagos.map((p,i) => (
                         <div key={i} style={{ padding:'5px 9px',borderRadius:'7px',fontSize:'11px',fontWeight:'600',background:p.montoVendedor===0?'var(--surface3)':p.pagadoVendedor?'rgba(34,197,94,0.1)':'rgba(251,191,36,0.1)',color:p.montoVendedor===0?'var(--text4)':p.pagadoVendedor?'var(--accent)':'var(--yellow)',border:'1px solid '+(p.montoVendedor===0?'var(--border)':p.pagadoVendedor?'rgba(74,222,128,0.2)':'rgba(251,191,36,0.2)') }}>
-                          {p.tipo==='enganche'?'🤝 Eng':'M'+p.numero}
-                          {p.montoVendedor>0 && <span style={{ marginLeft:'4px' }}>{formatDinero(p.montoVendedor)}</span>}
-                          {p.montoVendedor===0 && <span style={{ marginLeft:'4px',opacity:.6 }}>Ofic.</span>}
-                          {p.pagadoVendedor && <span style={{ marginLeft:'3px' }}>✓</span>}
+                          <div>{p.tipo==='enganche'?'🤝 Eng':'M'+p.numero}{p.montoVendedor>0&&<span style={{ marginLeft:'4px' }}>{formatDinero(p.montoVendedor)}</span>}{p.montoVendedor===0&&<span style={{ marginLeft:'4px',opacity:.6 }}>Ofic.</span>}{p.pagadoVendedor&&<span style={{ marginLeft:'3px' }}>✓</span>}</div>
+                          {p.fecha && <div style={{ fontSize:'9px',opacity:0.7,marginTop:'2px' }}>{new Date(p.fecha).toLocaleDateString('es-MX',{day:'2-digit',month:'short'})}</div>}
                         </div>
                       ))}
                     </div>
@@ -649,6 +651,7 @@ export default function Admin() {
                   <span>📅 {formatFecha(c.createdAt)}</span>
                   {c.mensualidad>0 && <span>💵 {formatDinero(c.mensualidad)}/mes</span>}
                   {c.loteNombre && <span>🏡 {c.loteNombre}</span>}
+                  {c.fuente && <span>📣 {c.fuente}</span>}
                 </div>
               </div>
               <button className="btn btn-success btn-sm" onClick={() => abrirWhatsApp(c.telefono)}>📱 WA</button>
@@ -681,24 +684,24 @@ export default function Admin() {
       {modalCliente && (
         <Modal titulo={editando?'Editar cliente':'Nuevo cliente'} onClose={() => setModalCliente(false)}>
           <Field label="Nombre completo" required><input className="input" value={fc.nombre} onChange={e => setFc({...fc,nombre:e.target.value})} placeholder="Ej: Juan García" autoFocus /></Field>
-          <Field label="Teléfono" required><input className="input" value={fc.telefono} onChange={e => setFc({...fc,telefono:e.target.value})} placeholder="Ej: 5512345678" inputMode="tel" /></Field>
+          <Field label="Teléfono"><input className="input" value={fc.telefono} onChange={e => setFc({...fc,telefono:e.target.value})} placeholder="Ej: 5512345678" inputMode="tel" /></Field>
+          <Field label="Fuente" hint="¿Cómo llegó este cliente?">
+            <input className="input" value={fc.fuente} onChange={e => setFc({...fc,fuente:e.target.value})} placeholder="Ej: Facebook, recomendación, visita directa..." />
+          </Field>
           <Field label="Asignar a vendedor">
             <select className="input" value={fc.vendedorId} onChange={e => setFc({...fc,vendedorId:e.target.value})}>
               <option value="">Sin asignar</option>
               {vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}
             </select>
           </Field>
-          <Field label="Lote asignado" hint="Solo muestra lotes disponibles">
-            <select className="input" value={fc.loteId||''} onChange={e => { const lote=lotes.find(l=>l.id===e.target.value); setFc({...fc,loteId:e.target.value,loteNombre:lote?'Mz '+lote.manzana+' Lt '+lote.numero:''}) }}>
-              <option value="">Sin lote asignado</option>
-              {lotes.filter(l=>l.disponible||l.id===fc.loteId).map(l => <option key={l.id} value={l.id}>Mz {l.manzana} Lt {l.numero}{l.precio>0?' — '+formatDinero(l.precio):''}</option>)}
-            </select>
+          <Field label="Lote" hint="Escribe el número de lote que le interesa o compró">
+            <input className="input" value={fc.loteNombre} onChange={e => setFc({...fc,loteNombre:e.target.value})} placeholder="Ej: Mz A Lt 12" />
           </Field>
           <Field label="Apartado ($)" hint="Opcional — 500 pesos = 8 días de vigencia">
             <input className="input" type="number" value={fc.montoApartado||''} onChange={e => setFc({...fc,montoApartado:e.target.value})} placeholder="Ej: 500" inputMode="numeric" />
           </Field>
           <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px' }}>
-            <Field label="Mensualidad ($)" required><input className="input" type="number" value={fc.mensualidad} onChange={e => setFc({...fc,mensualidad:e.target.value})} placeholder="2000" inputMode="numeric" /></Field>
+            <Field label="Mensualidad ($)"><input className="input" type="number" value={fc.mensualidad} onChange={e => setFc({...fc,mensualidad:e.target.value})} placeholder="2000" inputMode="numeric" /></Field>
             <Field label="Enganche ($)" hint="0 si no hubo"><input className="input" type="number" value={fc.enganche} onChange={e => setFc({...fc,enganche:e.target.value})} placeholder="0" inputMode="numeric" /></Field>
           </div>
           <Field label="Estado">
@@ -718,7 +721,7 @@ export default function Admin() {
           <Field label="PIN de acceso (4 dígitos)" required hint="El vendedor usa este PIN para iniciar sesión">
             <input className="input" type="text" inputMode="numeric" maxLength={4} value={fv.pin} onChange={e => setFv({...fv,pin:e.target.value.replace(/\D/g,'').slice(0,4)})} placeholder="1234" style={{ letterSpacing:'12px',fontSize:'24px',fontWeight:'800',textAlign:'center' }} />
           </Field>
-          <Field label="Comisión por venta ($)" required hint="Monto MXN por cada venta cerrada">
+          <Field label="Comisión por venta ($)" hint="Monto MXN por cada venta cerrada (puede editarse después)">
             <input className="input" type="number" value={fv.comision} onChange={e => setFv({...fv,comision:e.target.value})} placeholder="5000" inputMode="numeric" />
           </Field>
           <ErrorMsg>{error}</ErrorMsg>

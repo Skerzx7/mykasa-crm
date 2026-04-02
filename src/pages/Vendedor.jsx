@@ -36,7 +36,11 @@ export default function Vendedor() {
   const [fm, setFm] = useState({ titulo:'', texto:'' })
   const [guardandoMsg, setGuardandoMsg] = useState(false)
   const [modalNuevoCliente, setModalNuevoCliente] = useState(false)
-  const [fc, setFc] = useState({ nombre:'', telefono:'', notas:'', estado:'nuevo', mensualidad:2000, enganche:0 })
+  const [modalEditarCliente, setModalEditarCliente] = useState(false)
+  const [fe, setFe] = useState({ nombre:'', telefono:'', loteNombre:'', mensualidad:2000, enganche:0, montoApartado:'', notas:'' })
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false)
+  const [errorEdicion, setErrorEdicion] = useState('')
+  const [fc, setFc] = useState({ nombre:'', telefono:'', notas:'', estado:'nuevo', mensualidad:2000, enganche:0, loteNombre:'' })
   const [guardandoCliente, setGuardandoCliente] = useState(false)
   const [errorCliente, setErrorCliente] = useState('')
   const [modalNombre, setModalNombre] = useState(false)
@@ -109,18 +113,19 @@ export default function Vendedor() {
   }
 
   const abrirNuevoCliente = () => {
-    setFc({nombre:'',telefono:'',notas:'',estado:'nuevo',mensualidad:2000,enganche:0})
+    setFc({nombre:'',telefono:'',notas:'',estado:'nuevo',mensualidad:2000,enganche:0,loteNombre:''})
     setErrorCliente(''); setModalNuevoCliente(true)
   }
 
   const guardarCliente = async () => {
-    if (!fc.nombre.trim()||!fc.telefono.trim()) return setErrorCliente('Nombre y teléfono son obligatorios')
+    if (!fc.nombre.trim()) return setErrorCliente('El nombre es obligatorio')
     if (!user?.uid) return setErrorCliente('Sesión inválida')
     setGuardandoCliente(true); setErrorCliente('')
     try {
       await addDoc(collection(db,'clientes'), {
         nombre:fc.nombre.trim(), telefono:fc.telefono.trim(), notas:fc.notas.trim(),
         estado:fc.estado, mensualidad:Number(fc.mensualidad)||2000, enganche:Number(fc.enganche)||0,
+        loteNombre:fc.loteNombre||'',
         vendedorId:user.uid, vendedorNombre:userData?.nombre||'',
         comision:userData?.comision||5000, pagosRegistrados:[],
         createdAt:serverTimestamp(), updatedAt:serverTimestamp(),
@@ -128,6 +133,41 @@ export default function Vendedor() {
       setModalNuevoCliente(false); toast('Cliente agregado')
     } catch { setErrorCliente('Error al guardar.') }
     setGuardandoCliente(false)
+  }
+
+  const abrirEditarCliente = () => {
+    if (!clienteActivo) return
+    setFe({
+      nombre: clienteActivo.nombre||'',
+      telefono: clienteActivo.telefono||'',
+      loteNombre: clienteActivo.loteNombre||'',
+      mensualidad: clienteActivo.mensualidad||2000,
+      enganche: clienteActivo.enganche||0,
+      montoApartado: clienteActivo.montoApartado||'',
+      notas: clienteActivo.notas||'',
+    })
+    setErrorEdicion('')
+    setModalEditarCliente(true)
+  }
+
+  const guardarEdicion = async () => {
+    if (!fe.nombre.trim()) return setErrorEdicion('El nombre es obligatorio')
+    setGuardandoEdicion(true); setErrorEdicion('')
+    try {
+      await updateDoc(doc(db,'clientes',clienteActivo.id), {
+        nombre: fe.nombre.trim(),
+        telefono: fe.telefono.trim(),
+        loteNombre: fe.loteNombre.trim(),
+        mensualidad: Number(fe.mensualidad)||2000,
+        enganche: Number(fe.enganche)||0,
+        montoApartado: Number(fe.montoApartado)||0,
+        notas: fe.notas.trim(),
+        updatedAt: serverTimestamp(),
+      })
+      setModalEditarCliente(false)
+      toast('Cliente actualizado')
+    } catch { setErrorEdicion('Error al guardar.') }
+    setGuardandoEdicion(false)
   }
 
   const copiar = m => {
@@ -202,7 +242,9 @@ export default function Vendedor() {
           )}
         </div>
         <div style={{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
-          <button onClick={() => { if(confirm('¿Recargar la app? Se cerrará tu sesión actual.')) { logout(); window.location.reload() } }} title="Recargar" style={{background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'7px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:'15px',color:'var(--text3)'}}>↺</button>
+          <button onClick={() => { if(confirm('¿Recargar la app? Se cerrará tu sesión actual.')) { logout(); window.location.reload() } }}
+            title="Recargar"
+            style={{background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'7px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:'15px',color:'var(--text3)',flexShrink:0}}>↺</button>
           <button onClick={() => {setNuevoNombre(userData?.nombre||'');setModalNombre(true)}} style={{background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'8px',padding:'4px 8px',display:'flex',alignItems:'center',gap:'5px',cursor:'pointer'}}>
             <div style={{width:'20px',height:'20px',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',color:'white',fontWeight:'800',fontSize:'10px',flexShrink:0}}>{userData?.nombre?.charAt(0)}</div>
             <span style={{color:'var(--text2)',fontSize:'12px',fontWeight:'600',maxWidth:'65px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{userData?.nombre}</span>
@@ -264,6 +306,7 @@ export default function Vendedor() {
                         <span className="badge" style={{background:est.bg+'22',color:est.color,fontSize:'10px',border:'1px solid '+est.color+'33',flexShrink:0,marginLeft:'8px'}}>{est.icon} {est.label}</span>
                       </div>
                       <div style={{fontSize:'11px',color:'var(--text3)',marginBottom:'2px'}}>📱 {c.telefono}</div>
+                      {c.loteNombre && <div style={{fontSize:'10px',color:'var(--text3)',marginBottom:'2px'}}>🏡 {c.loteNombre}</div>}
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                         <span style={{fontSize:'10px',color:'var(--text4)'}}>{timeAgo(c.createdAt)}</span>
                         {c.mensualidad>0 && <span style={{fontSize:'10px',color:'var(--text3)',fontWeight:'600'}}>💵 {formatDinero(c.mensualidad)}/mes</span>}
@@ -295,12 +338,16 @@ export default function Vendedor() {
                       <h2 style={{fontSize:'15px',fontWeight:'800',marginBottom:'3px',color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{clienteActivo.nombre}</h2>
                       <div style={{fontSize:'11px',color:'var(--text3)',display:'flex',gap:'8px',flexWrap:'wrap'}}>
                         <span>📱 {clienteActivo.telefono}</span>
+                        {clienteActivo.loteNombre && <span>🏡 {clienteActivo.loteNombre}</span>}
                         {clienteActivo.mensualidad>0 && <span>💵 {formatDinero(clienteActivo.mensualidad)}/mes</span>}
                         <span>📅 {formatFecha(clienteActivo.createdAt)}</span>
                       </div>
                     </div>
                   </div>
-                  <button className="btn btn-success btn-sm" onClick={() => abrirWhatsApp(clienteActivo.telefono)} style={{flexShrink:0}}>📱 WA</button>
+                  <div style={{display:'flex',gap:'6px',alignItems:'center',flexShrink:0}}>
+                    <button className="btn btn-secondary btn-sm" onClick={abrirEditarCliente}>✏️ Editar</button>
+                    <button className="btn btn-success btn-sm" onClick={() => abrirWhatsApp(clienteActivo.telefono)} style={{flexShrink:0}}>📱 WA</button>
+                  </div>
                 </div>
               </div>
 
@@ -521,12 +568,16 @@ export default function Vendedor() {
               <h3 style={{fontSize:'16px',fontWeight:'700',color:'var(--text)'}}>Nuevo cliente</h3>
               <button onClick={() => setModalNuevoCliente(false)} style={{background:'var(--surface3)',border:'none',borderRadius:'8px',width:'28px',height:'28px',fontSize:'14px',cursor:'pointer',color:'var(--text3)'}}>✕</button>
             </div>
-            {[{label:'Nombre completo *',key:'nombre',placeholder:'Ej: Juan García',type:'text'},{label:'Teléfono *',key:'telefono',placeholder:'Ej: 5512345678',type:'tel'}].map(({label,key,placeholder,type}) => (
+            {[{label:'Nombre completo *',key:'nombre',placeholder:'Ej: Juan García',type:'text'},{label:'Teléfono',key:'telefono',placeholder:'Ej: 5512345678',type:'tel'}].map(({label,key,placeholder,type}) => (
               <div key={key} style={{marginBottom:'12px'}}>
                 <label style={fieldLbl}>{label}</label>
                 <input className="input" type={type} value={fc[key]} onChange={e => setFc({...fc,[key]:e.target.value})} placeholder={placeholder} autoFocus={key==='nombre'}/>
               </div>
             ))}
+            <div style={{marginBottom:'12px'}}>
+              <label style={fieldLbl}>Lote de interés</label>
+              <input className="input" value={fc.loteNombre} onChange={e => setFc({...fc,loteNombre:e.target.value})} placeholder="Ej: Mz A Lt 12"/>
+            </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'12px'}}>
               <div><label style={fieldLbl}>Mensualidad ($)</label><input className="input" type="number" value={fc.mensualidad} onChange={e => setFc({...fc,mensualidad:e.target.value})} placeholder="2000" inputMode="numeric"/></div>
               <div><label style={fieldLbl}>Enganche ($)</label><input className="input" type="number" value={fc.enganche} onChange={e => setFc({...fc,enganche:e.target.value})} placeholder="0" inputMode="numeric"/></div>
@@ -546,6 +597,55 @@ export default function Vendedor() {
               <button onClick={() => setModalNuevoCliente(false)} className="btn btn-secondary" style={{flex:1}}>Cancelar</button>
               <button onClick={guardarCliente} disabled={guardandoCliente} className="btn btn-primary" style={{flex:1,opacity:guardandoCliente?0.7:1}}>
                 {guardandoCliente?<><div className="spinner" style={{width:'16px',height:'16px'}}/><span>Guardando...</span></>:'Agregar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalEditarCliente && (
+        <div onClick={e => {if(e.target===e.currentTarget) setModalEditarCliente(false)}} style={overlayStyle}>
+          <div style={sheetStyle}>
+            <div style={handleBar}/>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
+              <h3 style={{fontSize:'16px',fontWeight:'700',color:'var(--text)'}}>Editar cliente</h3>
+              <button onClick={() => setModalEditarCliente(false)} style={{background:'var(--surface3)',border:'none',borderRadius:'8px',width:'28px',height:'28px',fontSize:'14px',cursor:'pointer',color:'var(--text3)'}}>✕</button>
+            </div>
+            <div style={{marginBottom:'12px'}}>
+              <label style={fieldLbl}>Nombre *</label>
+              <input className="input" value={fe.nombre} onChange={e => setFe({...fe,nombre:e.target.value})} placeholder="Nombre completo" autoFocus/>
+            </div>
+            <div style={{marginBottom:'12px'}}>
+              <label style={fieldLbl}>Teléfono</label>
+              <input className="input" type="tel" value={fe.telefono} onChange={e => setFe({...fe,telefono:e.target.value})} placeholder="Ej: 5512345678"/>
+            </div>
+            <div style={{marginBottom:'12px'}}>
+              <label style={fieldLbl}>Lote de interés</label>
+              <input className="input" value={fe.loteNombre} onChange={e => setFe({...fe,loteNombre:e.target.value})} placeholder="Ej: Mz A Lt 12"/>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'12px'}}>
+              <div>
+                <label style={fieldLbl}>Mensualidad ($)</label>
+                <input className="input" type="number" value={fe.mensualidad} onChange={e => setFe({...fe,mensualidad:e.target.value})} placeholder="2000" inputMode="numeric"/>
+              </div>
+              <div>
+                <label style={fieldLbl}>Enganche ($)</label>
+                <input className="input" type="number" value={fe.enganche} onChange={e => setFe({...fe,enganche:e.target.value})} placeholder="0" inputMode="numeric"/>
+              </div>
+            </div>
+            <div style={{marginBottom:'12px'}}>
+              <label style={fieldLbl}>Apartado ($)</label>
+              <input className="input" type="number" value={fe.montoApartado} onChange={e => setFe({...fe,montoApartado:e.target.value})} placeholder="0" inputMode="numeric"/>
+            </div>
+            <div style={{marginBottom:'16px'}}>
+              <label style={fieldLbl}>Notas</label>
+              <textarea className="input" value={fe.notas} onChange={e => setFe({...fe,notas:e.target.value})} rows={3} placeholder="Observaciones..." style={{resize:'none',fontSize:'13px'}}/>
+            </div>
+            {errorEdicion && <div style={{background:'var(--red-bg)',color:'var(--red)',padding:'10px 12px',borderRadius:'10px',fontSize:'12px',fontWeight:'600',marginBottom:'12px',border:'1px solid var(--red-border)'}}>⚠️ {errorEdicion}</div>}
+            <div style={{display:'flex',gap:'8px'}}>
+              <button onClick={() => setModalEditarCliente(false)} className="btn btn-secondary" style={{flex:1}}>Cancelar</button>
+              <button onClick={guardarEdicion} disabled={guardandoEdicion} className="btn btn-primary" style={{flex:1,opacity:guardandoEdicion?0.7:1}}>
+                {guardandoEdicion?<><div className="spinner" style={{width:'16px',height:'16px'}}/><span>Guardando...</span></>:'Guardar'}
               </button>
             </div>
           </div>

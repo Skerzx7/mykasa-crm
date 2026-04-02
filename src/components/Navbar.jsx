@@ -37,14 +37,7 @@ export default function Navbar({ tabs, tabActivo, onTab }) {
             fontSize: '15px',
             flexShrink: 0,
             boxShadow: '0 0 12px rgba(74,222,128,0.2)',
-          }}><svg width="30" height="30" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ borderRadius:'8px', flexShrink:0 }}>
-  <rect width="100" height="100" rx="18" fill="#0d1a10"/>
-  <polygon points="50,14 86,42 14,42" fill="#4ade80"/>
-  <rect x="20" y="42" width="60" height="44" rx="2" fill="#166534"/>
-  <rect x="38" y="56" width="24" height="30" rx="2" fill="#0d1a10"/>
-  <rect x="16" y="68" width="8" height="6" rx="1" fill="#4ade80" opacity="0.5"/>
-  <rect x="79" y="68" width="8" height="6" rx="1" fill="#4ade80" opacity="0.5"/>
-</svg></div>
+          }}>🏡</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
             <span style={{ color: '#e8f5ec', fontWeight: '700', fontSize: '14px', letterSpacing: '-0.2px' }}>MyKasa</span>
             <span style={{
@@ -92,6 +85,18 @@ export default function Navbar({ tabs, tabActivo, onTab }) {
               }}>{isAdmin ? 'Admin' : 'Vendedor'}</div>
             </div>
           </div>
+
+          <button onClick={() => { if(confirm('¿Recargar la app? Se cerrará tu sesión actual.')) { logout(); window.location.reload() } }}
+            title="Recargar"
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(74,222,128,0.12)',
+              borderRadius: '7px',
+              width: '32px', height: '32px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', fontSize: '15px', color: '#3d5442',
+              flexShrink: 0,
+            }}>↺</button>
 
           <button onClick={logout}
             style={{
