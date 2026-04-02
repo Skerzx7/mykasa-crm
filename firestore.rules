@@ -17,10 +17,10 @@ service cloud.firestore {
 
     // ── USERS ──────────────────────────────────────────────────────────────────
     match /users/{userId} {
-      allow get:    if isAdmin() || (isAuth() && request.auth.uid == userId);
+      allow get: if isAuth() && request.auth.uid == userId;
 
       // FIX: solo admin puede listar — vendedores no pueden escanear la colección
-      allow list:   if isAdmin();
+      allow list:   if isAuth();
 
       // Crear: admin o el propio usuario (auto-creación en syncVendorDoc)
       allow create: if isAdmin() || (isAuth() && request.auth.uid == userId);

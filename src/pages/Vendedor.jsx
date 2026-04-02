@@ -202,7 +202,7 @@ export default function Vendedor() {
           )}
         </div>
         <div style={{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
-          <button onClick={() => window.location.reload()} title="Recargar" style={{background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'7px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:'15px',color:'var(--text3)'}}>↺</button>
+          <button onClick={() => { if(confirm('¿Recargar la app? Se cerrará tu sesión actual.')) { logout(); window.location.reload() } }} title="Recargar" style={{background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'7px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:'15px',color:'var(--text3)'}}>↺</button>
           <button onClick={() => {setNuevoNombre(userData?.nombre||'');setModalNombre(true)}} style={{background:'var(--surface3)',border:'1px solid var(--border)',borderRadius:'8px',padding:'4px 8px',display:'flex',alignItems:'center',gap:'5px',cursor:'pointer'}}>
             <div style={{width:'20px',height:'20px',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',color:'white',fontWeight:'800',fontSize:'10px',flexShrink:0}}>{userData?.nombre?.charAt(0)}</div>
             <span style={{color:'var(--text2)',fontSize:'12px',fontWeight:'600',maxWidth:'65px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{userData?.nombre}</span>

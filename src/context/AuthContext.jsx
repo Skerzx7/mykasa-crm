@@ -11,11 +11,11 @@ async function syncVendorDoc(uid, pin) {
   const ownRef = doc(db, 'users', uid)
   const ownSnap = await getDoc(ownRef)
   if (ownSnap.exists()) {
-    const data = ownSnap.data()
-    if (data.role !== 'vendedor' || data.pin !== pin) { await signOut(auth); throw new Error('PIN incorrecto') }
-    return
-  }
-  const snap = await getDocs(query(collection(db, 'users'), where('pin', '==', pin), where('role', '==', 'vendedor')))
+  const data = ownSnap.data()
+  if (!['admin','vendedor'].includes(data.role) || data.pin !== pin) { await signOut(auth); throw new Error('PIN incorrecto') }
+  return
+}
+  const snap = await getDocs(query(collection(db, 'users'), where('pin', '==', pin)))
   if (snap.empty) { await signOut(auth); throw new Error('PIN incorrecto') }
   const oldDoc = snap.docs[0], oldUid = oldDoc.id, oldData = oldDoc.data()
   const { passwordInterno: _drop, ...cleanData } = oldData
